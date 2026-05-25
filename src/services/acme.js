@@ -89,7 +89,7 @@ function listCerts() {
     }
 
     certs.push({
-      domain: item,
+      domain: keyName,
       expireDate,
       issuedDate,
       certPath: fullchainPath,
@@ -133,10 +133,56 @@ function renewCert(domain) {
     args = `--renew -d "${domain}" --standalone --server letsencrypt --pre-hook "systemctl stop nginx 2>/dev/null || service nginx stop 2>/dev/null || true" --post-hook "systemctl start nginx 2>/dev/null || service nginx start 2>/dev/null || true"`;
   }
 
-  const out = acmeExec(args);
+  let out;
+  try {
+    out = acmeExec(args);
+  } catch (e) {
+    const msg = e.message || '';
+    if (msg.includes('Skipping') || msg.includes('Next renewal time')) {
+      return { success: true, message: '证书尚未到期，无需续期' };
+    }
+    throw e;
+  }
+
   // Reload nginx after renewal
   try { nginx.reload(); } catch {}
+  return { success: true, message: '证书续期成功' };
+}
+
+function renewAllCerts() {
+  const out = acmeExec('--renew-all --server letsencrypt');
+  try { nginx.reload(); } catch {}
   return { success: true, message: out.trim() };
+}
+
+function deleteCert(domain) {
+  const certsDir = path.join(ACME_HOME);
+  // Find matching cert directories (both normal and _ecc)
+  const items = fs.readdirSync(certsDir).filter(item => {
+    if (item.startsWith('.')) return false;
+    const stat = fs.statSync(path.join(certsDir, item));
+    if (!stat.isDirectory()) return false;
+    return item === domain || item === `${domain}_ecc`;
+  });
+
+  if (items.length === 0) {
+    throw new Error(`证书 ${domain} 未找到`);
+  }
+
+  // Remove via acme.sh first
+  try {
+    acmeExec(`--remove -d "${domain}"`);
+  } catch (e) {
+    // Continue even if acme.sh remove fails, we'll clean up manually
+  }
+
+  // Clean up directories
+  for (const item of items) {
+    const itemPath = path.join(certsDir, item);
+    fs.rmSync(itemPath, { recursive: true, force: true });
+  }
+
+  return { success: true, message: `证书 ${domain} 已删除` };
 }
 
 function getCertInfo(domain) {
@@ -169,6 +215,8 @@ function applyToNginx(domain, targetPort) {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
 }
 
@@ -203,5 +251,5 @@ server {
 }
 
 module.exports = {
-  checkInstalled, install, listCerts, issueCert, renewCert, getCertInfo, applyToNginx
+  checkInstalled, install, listCerts, issueCert, renewCert, renewAllCerts, deleteCert, getCertInfo, applyToNginx
 };

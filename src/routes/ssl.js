@@ -48,6 +48,26 @@ router.post('/renew/:domain', (req, res) => {
   }
 });
 
+router.post('/renew-all', (req, res) => {
+  try {
+    const result = acme.renewAllCerts();
+    res.json(result);
+  } catch (e) {
+    logger.error('SSL', '全部续期失败', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete('/cert/:domain', (req, res) => {
+  try {
+    const result = acme.deleteCert(req.params.domain);
+    res.json(result);
+  } catch (e) {
+    logger.error('SSL', `删除证书 ${req.params.domain} 失败`, e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/apply-to-nginx', (req, res) => {
   try {
     const { domain, targetPort } = req.body;

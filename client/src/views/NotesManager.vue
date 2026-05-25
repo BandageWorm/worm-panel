@@ -239,7 +239,7 @@ function formatTime(iso) {
   height: 100% !important;
   border: none;
   border-radius: 0;
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: Consolas, 'Source Code Pro', monospace;
   font-size: 14px;
   line-height: 1.6;
   resize: none;

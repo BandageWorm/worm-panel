@@ -49,6 +49,17 @@
       </el-form>
     </el-card>
 
+    <!-- Actions -->
+    <div class="actions-bar">
+      <el-button type="primary" size="large" :loading="saving" @click="handleSave">
+        保存设置
+      </el-button>
+      <el-button size="large" type="danger" plain :loading="restarting" @click="confirmRestart">
+        <el-icon><Refresh /></el-icon>
+        重启面板
+      </el-button>
+    </div>
+
     <!-- Security Settings -->
     <el-card shadow="never" class="settings-card">
       <template #header>
@@ -76,19 +87,13 @@
             style="width:360px"
           />
         </el-form-item>
+        <el-form-item>
+          <el-button type="warning" :loading="changingPwd" @click="handleChangePassword">
+            修改密码
+          </el-button>
+        </el-form-item>
       </el-form>
     </el-card>
-
-    <!-- Actions -->
-    <div class="actions-bar">
-      <el-button type="primary" size="large" :loading="saving" @click="handleSave">
-        保存设置
-      </el-button>
-      <el-button size="large" type="danger" plain :loading="restarting" @click="confirmRestart">
-        <el-icon><Refresh /></el-icon>
-        重启面板
-      </el-button>
-    </div>
   </div>
 </template>
 
@@ -98,6 +103,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, put, post } from '../api'
 
 const saving = ref(false)
+const changingPwd = ref(false)
 const restarting = ref(false)
 
 const form = reactive({
@@ -123,18 +129,6 @@ onMounted(async () => {
 })
 
 async function handleSave() {
-  // Validate password
-  if (passwordForm.password || passwordForm.confirm) {
-    if (passwordForm.password !== passwordForm.confirm) {
-      ElMessage.error('两次密码输入不一致')
-      return
-    }
-    if (passwordForm.password.length < 6) {
-      ElMessage.error('密码至少 6 位')
-      return
-    }
-  }
-
   // Validate domain in proxy mode
   if (form.mode === 'proxy' && !form.domain) {
     ElMessage.error('Proxy 模式需要填写绑定域名')
@@ -148,16 +142,9 @@ async function handleSave() {
       mode: form.mode,
       domain: form.domain || undefined
     }
-    if (passwordForm.password) {
-      body.password = passwordForm.password
-    }
 
     const res = await put('/settings', body)
     ElMessage.success(res.message)
-
-    // Clear password fields after save
-    passwordForm.password = ''
-    passwordForm.confirm = ''
 
     if (res.needsRestart) {
       ElMessage.warning('已修改端口或模式，请重启面板使设置生效', 5000)
@@ -166,6 +153,29 @@ async function handleSave() {
     ElMessage.error(e.message)
   } finally {
     saving.value = false
+  }
+}
+
+async function handleChangePassword() {
+  if (passwordForm.password !== passwordForm.confirm) {
+    ElMessage.error('两次密码输入不一致')
+    return
+  }
+  if (passwordForm.password.length < 6) {
+    ElMessage.error('密码至少 6 位')
+    return
+  }
+
+  changingPwd.value = true
+  try {
+    const res = await put('/settings/password', { password: passwordForm.password })
+    ElMessage.success(res.message)
+    passwordForm.password = ''
+    passwordForm.confirm = ''
+  } catch (e) {
+    ElMessage.error(e.message)
+  } finally {
+    changingPwd.value = false
   }
 }
 
@@ -232,5 +242,6 @@ async function confirmRestart() {
   display: flex;
   gap: 12px;
   padding-top: 8px;
+  margin-bottom: 16px;
 }
 </style>

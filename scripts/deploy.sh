@@ -50,10 +50,28 @@ log_ok "Files copied"
 
 cd "$INSTALL_DIR"
 
+# ── Load nvm (优先使用 nvm 管理 node/npm) ──
+
+export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+  # 确保 systemd service 也能找到 nvm 的 node
+  NODE_PATH="$(which node)"
+  if [ -n "$NODE_PATH" ] && [ "$NODE_PATH" != "/usr/bin/node" ]; then
+    ln -sf "$NODE_PATH" /usr/bin/node
+    log_ok "Using nvm node: $NODE_PATH"
+  fi
+elif command -v node &> /dev/null; then
+  log_warn "nvm not found, using system node: $(which node)"
+else
+  log_error "node not found, please install Node.js first"
+  exit 1
+fi
+
 # ── Install backend dependencies ──
 
 log_info "Installing backend dependencies..."
-npm install --production
+npm install --omit=dev
 log_ok "Backend dependencies installed"
 
 # ── Build frontend ──
@@ -63,9 +81,30 @@ cd "$INSTALL_DIR/client"
 npm install
 log_ok "Frontend dependencies installed"
 
+# 低内存服务器构建前端时临时启用 swap（Vite 打包大文件时可能 OOM）
+SWAP_FILE="/swap.build"
+SWAP_ACTIVE=0
+if [ "$(free -m | awk '/^Mem:/{print $7}')" -lt 512 ]; then
+  if ! swapon --show 2>/dev/null | grep -q .; then
+    log_info "Available memory <512MB, creating temporary swap for build..."
+    dd if=/dev/zero of="$SWAP_FILE" bs=1M count=1024 2>/dev/null
+    chmod 600 "$SWAP_FILE"
+    mkswap "$SWAP_FILE" 2>/dev/null
+    swapon "$SWAP_FILE" 2>/dev/null && SWAP_ACTIVE=1
+    log_ok "Temporary swap activated (1024MB)"
+  fi
+fi
+
 log_info "Building frontend (output to ../public)..."
 npm run build
 log_ok "Frontend built"
+
+# 清理临时 swap
+if [ "$SWAP_ACTIVE" -eq 1 ]; then
+  swapoff "$SWAP_FILE" 2>/dev/null
+  rm -f "$SWAP_FILE"
+  log_ok "Temporary swap removed"
+fi
 
 cd "$INSTALL_DIR"
 
@@ -75,22 +114,6 @@ if [ -f worm-panel.service ]; then
   cp worm-panel.service /etc/systemd/system/worm-panel.service
   systemctl daemon-reload
   log_ok "systemd service file updated"
-fi
-
-# ── Ensure node path is available ──
-
-if ! command -v /usr/bin/node &> /dev/null; then
-  # Load nvm to locate node
-  export NVM_DIR="$HOME/.nvm"
-  if [ -s "$NVM_DIR/nvm.sh" ]; then
-    . "$NVM_DIR/nvm.sh"
-  fi
-  if command -v node &> /dev/null; then
-    ln -sf "$(which node)" /usr/bin/node
-    log_ok "/usr/bin/node linked to $(which node)"
-  else
-    log_warn "node not found, please install Node.js first"
-  fi
 fi
 
 # ── Restart service ──

@@ -1,8 +1,11 @@
 const https = require('https');
+const http = require('http');
+const { WebSocketServer } = require('ws');
 const { createApp } = require('./src/index');
 const config = require('./src/services/config');
 const nginx = require('./src/services/nginx');
 const cert = require('./src/services/cert');
+const { createTerminal } = require('./src/services/terminal');
 const logger = require('./src/utils/logger');
 
 // Global exception handlers for uncaught errors
@@ -24,12 +27,29 @@ if (cfg.initialized) {
 
 const app = createApp();
 
-function startWithHttps(sslCreds) {
-  const httpsServer = https.createServer(sslCreds, app);
+function startServer(server) {
+  // Attach WebSocket server for terminal
+  const wss = new WebSocketServer({ noServer: true });
 
-  httpsServer.listen(port, host, () => {
-    logger.info('App', `Worm Panel running on https://${host}:${port}, mode: ${cfg.mode}`);
-    showSetupInfo(host, port, 'https');
+  wss.on('connection', (ws, req) => {
+    createTerminal(ws, req);
+  });
+
+  server.on('upgrade', (request, socket, head) => {
+    const url = new URL(request.url, 'http://localhost');
+    if (url.pathname === '/api/terminal') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
+
+  server.listen(port, host, () => {
+    const protocol = server instanceof https.Server ? 'https' : 'http';
+    logger.info('App', `Worm Panel running on ${protocol}://${host}:${port}, mode: ${cfg.mode}`);
+    showSetupInfo(host, port, protocol);
   });
 }
 
@@ -38,19 +58,16 @@ const useHttps = cfg.mode !== 'proxy';
 if (useHttps) {
   try {
     const sslCreds = cert.get();
-    startWithHttps(sslCreds);
+    const server = https.createServer(sslCreds, app);
+    startServer(server);
   } catch (e) {
     logger.error('App', '生成 SSL 证书失败，回退到 HTTP', e);
-    app.listen(port, host, () => {
-      logger.info('App', `Worm Panel running on http://${host}:${port}, mode: ${cfg.mode}`);
-      showSetupInfo(host, port, 'http');
-    });
+    const server = http.createServer(app);
+    startServer(server);
   }
 } else {
-  app.listen(port, host, () => {
-    logger.info('App', `Worm Panel running on http://${host}:${port}, mode: ${cfg.mode}`);
-    showSetupInfo(host, port, 'http');
-  });
+  const server = http.createServer(app);
+  startServer(server);
 }
 
 function showSetupInfo(host, port, protocol) {

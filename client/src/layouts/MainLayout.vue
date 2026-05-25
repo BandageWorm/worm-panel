@@ -17,6 +17,14 @@
           <el-icon><Monitor /></el-icon>
           <span>仪表盘</span>
         </el-menu-item>
+        <el-menu-item index="/files">
+          <el-icon><Folder /></el-icon>
+          <span>文件管理</span>
+        </el-menu-item>
+        <el-menu-item index="/terminal">
+          <el-icon><Monitor /></el-icon>
+          <span>终端</span>
+        </el-menu-item>
         <el-menu-item index="/nginx">
           <el-icon><Connection /></el-icon>
           <span>Nginx</span>

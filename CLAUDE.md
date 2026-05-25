@@ -29,7 +29,12 @@
 | Workers 部署 | 从 GitHub clone 项目 → npx wrangler deploy |
 | 3X-UI | 运行状态查看 + Nginx 反代入口 |
 
-## 安装方式
+## 部署流程
+
+代码修改后运行 `bash scripts/sync-and-deploy.sh` 自动部署到生产服务器：
+1. 自动检测 git 中修改/新增的文件
+2. scp 增量推送到服务器的 /root/worm-panel
+3. SSH 执行 deploy.sh 构建并重启面板
 
 - systemd service 管理
 - 安装脚本使用 nvm 安装 Node.js 20.x
@@ -113,3 +118,4 @@
 - Nginx 命令遇到 Permission denied 自动重试加 sudo（WSL2 兼容）
 - 修改 Nginx 配置前自动备份，保留最近 30 份
 - 除 /api/auth/login 和 /api/setup/* 外，所有 API 需 JWT Bearer token
+- 归档 OpenSpec 变更时：先同步 delta specs 到主 specs，再归档

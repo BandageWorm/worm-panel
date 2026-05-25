@@ -288,7 +288,7 @@ function formatBytes(bytes) {
   margin-bottom: 12px;
 }
 .config-editor {
-  font-family: 'Courier New', Consolas, monospace;
+  font-family: Consolas, 'Source Code Pro', monospace;
   font-size: 13px;
   line-height: 1.5;
 }

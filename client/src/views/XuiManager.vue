@@ -37,8 +37,8 @@
       <el-col :span="6">
         <el-card shadow="never">
           <div class="stat-item">
-            <div class="stat-label">版本</div>
-            <div class="stat-value">{{ status.version || '--' }}</div>
+            <div class="stat-label">安装路径</div>
+            <div class="stat-value" style="font-size:14px">{{ status.installPath || '--' }}</div>
           </div>
         </el-card>
       </el-col>
@@ -81,24 +81,6 @@
         </div>
       </template>
       <el-alert title="无法获取服务器 IP，请检查网络配置" type="warning" :closable="false" show-icon />
-    </el-card>
-
-    <!-- Detail Info -->
-    <el-card class="section-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <el-icon><InfoFilled /></el-icon>
-          <span>详细信息</span>
-        </div>
-      </template>
-      <el-descriptions :column="2" border size="small">
-        <el-descriptions-item label="安装路径">{{ status.installPath || '--' }}</el-descriptions-item>
-        <el-descriptions-item label="运行时长">{{ formatUptime(status.uptime) }}</el-descriptions-item>
-        <el-descriptions-item label="CPU 占用">{{ status.cpu !== null ? status.cpu + '%' : '--' }}</el-descriptions-item>
-        <el-descriptions-item label="内存占用">{{ status.memory !== null ? status.memory + '%' : '--' }}</el-descriptions-item>
-        <el-descriptions-item label="Web 路径">{{ status.webPath || '--' }}</el-descriptions-item>
-        <el-descriptions-item label="服务器 IP">{{ status.serverIP || '--' }}</el-descriptions-item>
-      </el-descriptions>
     </el-card>
 
     <!-- Nginx Proxy (optional) -->
@@ -189,16 +171,6 @@ async function handleRemoveProxy() {
     fetchStatus()
   } catch {}
   removing.value = false
-}
-
-function formatUptime(seconds) {
-  if (!seconds) return '--'
-  const d = Math.floor(seconds / 86400)
-  const h = Math.floor((seconds % 86400) / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
 }
 </script>
 

@@ -9,6 +9,8 @@ const routes = [
     redirect: '/dashboard',
     children: [
       { path: 'dashboard', component: () => import('../views/Dashboard.vue') },
+      { path: 'files', component: () => import('../views/FileManager.vue'), meta: { title: '文件管理' } },
+      { path: 'terminal', component: () => import('../views/TerminalPage.vue'), meta: { title: '终端' } },
       { path: 'nginx', component: () => import('../views/NginxManager.vue'), meta: { title: 'Nginx 管理' } },
       { path: 'ssl', component: () => import('../views/SslManager.vue'), meta: { title: 'SSL 证书' } },
       { path: 'notes', component: () => import('../views/NotesManager.vue'), meta: { title: '记事本' } },

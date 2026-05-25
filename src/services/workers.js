@@ -24,7 +24,7 @@ function saveProjects(projects) {
 
 function checkWrangler() {
   try {
-    const out = execSync('npx wrangler --version 2>&1', {
+    const out = execSync('wrangler --version 2>&1', {
       encoding: 'utf8',
       timeout: 15000
     });
@@ -116,7 +116,7 @@ function deploy(name) {
   // Step 2: wrangler deploy
   let wranglerOutput = '';
   try {
-    wranglerOutput = execSync('npx wrangler deploy 2>&1', {
+    wranglerOutput = execSync('wrangler deploy 2>&1', {
       cwd: localPath, encoding: 'utf8', timeout: 60000
     });
   } catch (e) {

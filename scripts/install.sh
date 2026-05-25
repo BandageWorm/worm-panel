@@ -33,15 +33,21 @@ fi
 . /etc/os-release
 log_info "Detected OS: $NAME $VERSION"
 
+# 更新 apt 缓存并安装基础工具（新系统可能没有 curl、build-essential）
+log_info "Installing system prerequisites..."
+apt-get update -qq
+apt-get install -y -qq curl build-essential 2>/dev/null
+log_ok "System prerequisites installed"
+
 INSTALL_DIR="/opt/worm-panel"
 SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# ── Node.js ──
+# ── Node.js (always use nvm) ──
 
 install_nodejs() {
   log_info "Installing nvm and Node.js 20.x..."
 
-  # Install nvm
+  # Install nvm (idempotent - safe to re-run)
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 
   # Load nvm
@@ -52,22 +58,19 @@ install_nodejs() {
   nvm install 20
   nvm alias default 20
 
-  # Create symlink for systemd service
+  # Symlink nvm's node to /usr/bin/node for systemd service
   ln -sf "$(which node)" /usr/bin/node
 
   log_ok "Node.js $(node --version) installed via nvm"
 }
 
-if ! command -v node &> /dev/null; then
-  install_nodejs
-else
-  NODE_VER=$(node --version | sed 's/v//' | cut -d. -f1)
-  if [ "$NODE_VER" -lt 18 ]; then
-    log_warn "Node.js $(node --version) is too old, upgrading to 20.x..."
-    install_nodejs
-  else
-    log_ok "Node.js $(node --version) is already installed"
-  fi
+# 始终安装 nvm（无论系统是否有 node），避免系统自带 npm 损坏问题
+install_nodejs
+
+# 如果系统 apt 安装了 nodejs，卸载它以免干扰
+if dpkg -l nodejs 2>/dev/null | grep -q '^ii'; then
+  log_info "Removing system nodejs package (nvm will be used instead)..."
+  apt-get remove -y nodejs 2>/dev/null && log_ok "System nodejs removed" || log_warn "Failed to remove system nodejs (ignored)"
 fi
 
 # ── Nginx ──
@@ -86,6 +89,28 @@ fi
 if ! command -v git &> /dev/null; then
   log_info "Installing git..."
   apt-get install -y git
+fi
+
+# ── Wrangler (Cloudflare Workers CLI) ──
+
+if ! command -v wrangler &> /dev/null; then
+  log_info "Installing wrangler..."
+
+  # 确保使用 nvm 的 npm（系统 npm 可能损坏）
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+  npm install -g wrangler
+
+  # 创建软链，systemd 服务才能找到
+  WRANGLER_PATH="$(which wrangler 2>/dev/null)"
+  if [ -n "$WRANGLER_PATH" ] && [ "$WRANGLER_PATH" != "/usr/local/bin/wrangler" ]; then
+    ln -sf "$WRANGLER_PATH" /usr/local/bin/wrangler
+  fi
+
+  log_ok "wrangler installed"
+else
+  log_ok "wrangler is already installed"
 fi
 
 # ── Create Directories ──
@@ -108,7 +133,7 @@ cd "$INSTALL_DIR"
 # ── Install Backend Dependencies ──
 
 log_info "Installing backend dependencies..."
-npm install --production
+npm install --omit=dev
 log_ok "Backend dependencies installed"
 
 # ── Install Frontend Dependencies & Build ──
@@ -118,9 +143,31 @@ cd "$INSTALL_DIR/client"
 npm install
 log_ok "Frontend dependencies installed"
 
+# 低内存服务器构建前端时临时启用 swap（Vite 打包大文件时可能 OOM）
+SWAP_FILE="/swap.build"
+SWAP_ACTIVE=0
+if [ "$(free -m | awk '/^Mem:/{print $7}')" -lt 512 ]; then
+  if ! swapon --show 2>/dev/null | grep -q .; then
+    log_info "Available memory <512MB, creating temporary swap for build..."
+    dd if=/dev/zero of="$SWAP_FILE" bs=1M count=1024 2>/dev/null
+    chmod 600 "$SWAP_FILE"
+    mkswap "$SWAP_FILE" 2>/dev/null
+    swapon "$SWAP_FILE" 2>/dev/null && SWAP_ACTIVE=1
+    log_ok "Temporary swap activated (1024MB)"
+  fi
+fi
+
 log_info "Building frontend assets..."
 npm run build
 log_ok "Frontend built successfully"
+
+# 清理临时 swap
+if [ "$SWAP_ACTIVE" -eq 1 ]; then
+  swapoff "$SWAP_FILE" 2>/dev/null
+  rm -f "$SWAP_FILE"
+  log_ok "Temporary swap removed"
+fi
+
 cd "$INSTALL_DIR"
 
 # ── Setup systemd Service ──

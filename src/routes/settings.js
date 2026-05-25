@@ -100,6 +100,23 @@ router.put('/', async (req, res) => {
   }
 });
 
+// PUT /api/settings/password — 单独修改密码
+router.put('/password', async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: '密码至少 6 位' });
+    }
+    const cfg = config.load();
+    cfg.passwordHash = await hashPassword(password);
+    config.save(cfg);
+    res.json({ success: true, message: '密码已修改' });
+  } catch (err) {
+    logger.error('Settings', '修改密码失败', err);
+    res.status(500).json({ error: err.message || '修改密码失败' });
+  }
+});
+
 // POST /api/settings/restart — 重启面板
 router.post('/restart', (req, res) => {
   try {

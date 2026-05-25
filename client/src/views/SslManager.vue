@@ -17,9 +17,14 @@
       <template #header>
         <div class="card-header">
           <span>已签发证书</span>
-          <el-button size="small" type="primary" @click="showIssueDialog = true" :disabled="!acmeInstalled">
-            申请新证书
-          </el-button>
+          <div>
+            <el-button size="small" @click="handleRenewAll" :loading="renewingAll" :disabled="!acmeInstalled || certs.length === 0" style="margin-right:8px">
+              全部续期
+            </el-button>
+            <el-button size="small" type="primary" @click="showIssueDialog = true" :disabled="!acmeInstalled">
+              申请新证书
+            </el-button>
+          </div>
         </div>
       </template>
 
@@ -35,10 +40,10 @@
             <el-tag v-else size="small" type="success">有效</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button text size="small" @click="handleRenew(row)">续期</el-button>
-            <el-button text size="small" type="primary" @click="showApplyDialog(row)">配置 Nginx</el-button>
+            <el-button text size="small" type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -60,44 +65,24 @@
       </template>
     </el-dialog>
 
-    <!-- Apply to Nginx Dialog -->
-    <el-dialog v-model="showApplyDialogBox" title="配置 Nginx SSL" width="500px">
-      <el-form :model="applyForm" label-position="top">
-        <el-form-item label="域名">
-          <el-input v-model="applyForm.domain" disabled />
-        </el-form-item>
-        <el-form-item label="反代目标端口">
-          <el-input-number v-model="applyForm.targetPort" :min="1" :max="65535" style="width:100%" />
-          <div class="form-tip">该域名反代到的后端端口</div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showApplyDialogBox = false">取消</el-button>
-        <el-button type="primary" :loading="applying" @click="handleApply">应用</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { get, post } from '../api'
+import { get, post, del } from '../api'
 
 const acmeInstalled = ref(false)
 const installing = ref(false)
 const loading = ref(false)
+const renewingAll = ref(false)
 const certs = ref([])
 
 // Issue
 const showIssueDialog = ref(false)
 const issuing = ref(false)
 const issueForm = ref({ domain: '' })
-
-// Apply to nginx
-const showApplyDialogBox = ref(false)
-const applying = ref(false)
-const applyForm = ref({ domain: '', targetPort: 3000 })
 
 onMounted(() => {
   fetchStatus()
@@ -146,21 +131,28 @@ async function handleIssue() {
   issuing.value = false
 }
 
-function showApplyDialog(row) {
-  applyForm.value = { domain: row.domain, targetPort: 3000 }
-  showApplyDialogBox.value = true
+async function handleRenewAll() {
+  try {
+    await ElMessageBox.confirm('确定要续期所有证书？', '确认续期')
+    renewingAll.value = true
+    const res = await post('/ssl/renew-all')
+    ElMessage.success('全部续期成功')
+    fetchCerts()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '续期失败')
+  }
+  renewingAll.value = false
 }
 
-async function handleApply() {
-  applying.value = true
+async function handleDelete(row) {
   try {
-    const res = await post('/ssl/apply-to-nginx', applyForm.value)
-    ElMessage.success(res.message)
-    showApplyDialogBox.value = false
+    await ElMessageBox.confirm(`确定要删除 ${row.domain} 的证书？`, '确认删除', { type: 'warning' })
+    await del(`/ssl/cert/${row.domain}`)
+    ElMessage.success('证书已删除')
+    fetchCerts()
   } catch (e) {
-    ElMessage.error(e.message)
+    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
   }
-  applying.value = false
 }
 
 async function handleRenew(row) {
