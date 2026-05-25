@@ -1,0 +1,14 @@
+[Unit]
+Description=Worm Panel
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/worm-panel
+ExecStart=/root/.nvm/nvm-exec node app.js
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,38 @@
+schema: spec-driven
+
+context: |
+  Project: Worm Panel — 服务器管理 Web 面板
+  Tech stack: Node.js, Vue 3, Vite
+  Domain: 服务器运维管理
+
+  Architecture:
+    - 单端口 4567 服务，前端静态文件由后端托管
+    - 无域名模式: 监听 0.0.0.0:4567，HTTP 直连
+    - 有域名模式: 监听 127.0.0.1:4567，Nginx 反代 + HTTPS
+    - 认证: bcrypt 密码哈希，JWT 48h 过期
+
+  Key modules:
+    - Nginx 管理: 可视化添加反代 + 文本编辑器，操作自动备份，面板自身配置锁定
+    - PM2 管理: 进程列表、重启/停止、配置编辑、日志
+    - SSL 证书: acme.sh 一键申请
+    - Workers 部署: GitHub clone → npx wrangler deploy
+    - 记事本: Markdown，文件系统存储
+    - 3X-UI: 状态查看 + 反代入口
+    - 系统设置: 域名、端口、密码修改
+
+  Security:
+    - 基础防护，不追求高强度安全
+    - 敏感操作（nginx 编辑、面板设置修改）需二次确认
+    - 首次启动通过 /setup 初始化
+
+  Installation:
+    - systemd 管理
+    - 安装脚本需要处理 Node.js 环境
+    - 首次启动生成一次性设置 Token 打印日志
+
+rules:
+  proposal:
+    - 每个变更聚焦一个独立功能模块
+    - 包含模块边界说明（做什么和不做什么）
+  tasks:
+    - 任务粒度控制在 2-4 小时
