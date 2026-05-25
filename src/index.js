@@ -41,6 +41,7 @@ function createApp() {
   app.use('/api/pm2', authMiddleware, require('./routes/pm2'));
   app.use('/api/workers', authMiddleware, require('./routes/workers'));
   app.use('/api/xui', authMiddleware, require('./routes/xui'));
+  app.use('/api/settings', authMiddleware, require('./routes/settings'));
 
   // SPA fallback - serve index.html for all non-API routes
   app.get('*', (req, res) => {

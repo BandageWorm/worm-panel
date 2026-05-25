@@ -1,6 +1,8 @@
+const https = require('https');
 const { createApp } = require('./src/index');
 const config = require('./src/services/config');
 const nginx = require('./src/services/nginx');
+const cert = require('./src/services/cert');
 const logger = require('./src/utils/logger');
 
 // Global exception handlers for uncaught errors
@@ -22,16 +24,43 @@ if (cfg.initialized) {
 
 const app = createApp();
 
-app.listen(port, host, () => {
-  logger.info('App', `Worm Panel running on http://${host}:${port}, mode: ${cfg.mode}`);
+function startWithHttps(sslCreds) {
+  const httpsServer = https.createServer(sslCreds, app);
 
+  httpsServer.listen(port, host, () => {
+    logger.info('App', `Worm Panel running on https://${host}:${port}, mode: ${cfg.mode}`);
+    showSetupInfo(host, port, 'https');
+  });
+}
+
+const useHttps = cfg.mode !== 'proxy';
+
+if (useHttps) {
+  try {
+    const sslCreds = cert.get();
+    startWithHttps(sslCreds);
+  } catch (e) {
+    logger.error('App', '生成 SSL 证书失败，回退到 HTTP', e);
+    app.listen(port, host, () => {
+      logger.info('App', `Worm Panel running on http://${host}:${port}, mode: ${cfg.mode}`);
+      showSetupInfo(host, port, 'http');
+    });
+  }
+} else {
+  app.listen(port, host, () => {
+    logger.info('App', `Worm Panel running on http://${host}:${port}, mode: ${cfg.mode}`);
+    showSetupInfo(host, port, 'http');
+  });
+}
+
+function showSetupInfo(host, port, protocol) {
   if (!cfg.initialized) {
     const { generateSetupToken } = require('./src/services/setup');
     const token = generateSetupToken();
     console.log('────────────────────────────────────────');
     console.log(' First-time setup required!');
-    console.log(` Visit http://${host}:${port}/setup`);
+    console.log(` Visit ${protocol}://${host}:${port}/setup`);
     console.log(` Setup token: ${token}`);
     console.log('────────────────────────────────────────');
   }
-});
+}

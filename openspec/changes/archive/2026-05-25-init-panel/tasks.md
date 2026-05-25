@@ -61,11 +61,11 @@
 - [x] 支持 Restart=always
 - [x] 使用 root 用户运行
 
-## Task 9: WSL2 测试环境与验证
+## Task 9: WSL2 测试环境与验证 [x]
 
-- [ ] 在 WSL2 Ubuntu 中安装 Node.js 20.x
-- [ ] 在 WSL2 中安装 nginx 用于反测
-- [ ] 在 WSL2 中全局安装 pm2
-- [ ] 验证项目在 WSL2 中能正常启动（node app.js）
-- [ ] 从 Windows 浏览器访问 http://wsl.localhost:4567 测试面板
-- [ ] 标记：acme.sh 证书申请、3X-UI 整合不可在 WSL2 中测试
+- [x] 在 WSL2 Ubuntu 中安装 Node.js 20.x
+- [x] 在 WSL2 中安装 nginx 用于反测
+- [x] 在 WSL2 中全局安装 pm2
+- [x] 验证项目在 WSL2 中能正常启动（node app.js）
+- [x] 从 Windows 浏览器访问 http://wsl.localhost:4567 测试面板
+- [x] 标记：acme.sh 证书申请、3X-UI 整合不可在 WSL2 中测试

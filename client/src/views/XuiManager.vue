@@ -1,6 +1,6 @@
 <template>
   <div class="xui-manager">
-    <!-- Status Card -->
+    <!-- Status Cards -->
     <el-row :gutter="16">
       <el-col :span="6">
         <el-card shadow="never">
@@ -44,23 +44,70 @@
       </el-col>
     </el-row>
 
-    <!-- Detail Info -->
-    <el-card class="detail-card" shadow="never">
+    <!-- Direct Access -->
+    <el-card shadow="never" class="section-card" v-if="status.directUrl">
       <template #header>
-        <span>详细信息</span>
+        <div class="card-header">
+          <el-icon><Link /></el-icon>
+          <span>直接访问</span>
+        </div>
+      </template>
+      <div class="direct-access">
+        <el-alert
+          title="3X-UI 面板已就绪，点击下方按钮直接访问"
+          type="success"
+          :closable="false"
+          show-icon
+          class="access-alert"
+        />
+        <el-button type="primary" size="large" @click="openDirectUrl">
+          <el-icon><Open /></el-icon>
+          打开 3X-UI 面板
+        </el-button>
+        <div class="access-info">
+          <span class="info-label">地址:</span>
+          <code class="info-value">{{ status.directUrl }}</code>
+          <el-tag size="small" type="info" class="info-tag">端口 {{ status.port }}</el-tag>
+          <el-tag size="small" type="info" v-if="status.webPath">路径 {{ status.webPath }}</el-tag>
+        </div>
+      </div>
+    </el-card>
+
+    <el-card shadow="never" class="section-card" v-else-if="status.running">
+      <template #header>
+        <div class="card-header">
+          <el-icon><Warning /></el-icon>
+          <span>直接访问</span>
+        </div>
+      </template>
+      <el-alert title="无法获取服务器 IP，请检查网络配置" type="warning" :closable="false" show-icon />
+    </el-card>
+
+    <!-- Detail Info -->
+    <el-card class="section-card" shadow="never">
+      <template #header>
+        <div class="card-header">
+          <el-icon><InfoFilled /></el-icon>
+          <span>详细信息</span>
+        </div>
       </template>
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="安装路径">{{ status.installPath || '--' }}</el-descriptions-item>
         <el-descriptions-item label="运行时长">{{ formatUptime(status.uptime) }}</el-descriptions-item>
         <el-descriptions-item label="CPU 占用">{{ status.cpu !== null ? status.cpu + '%' : '--' }}</el-descriptions-item>
         <el-descriptions-item label="内存占用">{{ status.memory !== null ? status.memory + '%' : '--' }}</el-descriptions-item>
+        <el-descriptions-item label="Web 路径">{{ status.webPath || '--' }}</el-descriptions-item>
+        <el-descriptions-item label="服务器 IP">{{ status.serverIP || '--' }}</el-descriptions-item>
       </el-descriptions>
     </el-card>
 
-    <!-- Nginx Proxy -->
-    <el-card shadow="never">
+    <!-- Nginx Proxy (optional) -->
+    <el-card shadow="never" class="section-card">
       <template #header>
-        <span>Nginx 反代入口</span>
+        <div class="card-header">
+          <el-icon><Connection /></el-icon>
+          <span>Nginx 反代（可选）</span>
+        </div>
       </template>
 
       <div v-if="status.proxyUrl">
@@ -77,7 +124,7 @@
       </div>
 
       <div v-else>
-        <p class="proxy-empty">未配置反代入口</p>
+        <p class="proxy-empty">通过域名反代访问 3X-UI（可选，不配置也可通过上方直接访问）</p>
         <div class="proxy-form">
           <el-input v-model="proxyDomain" placeholder="输入子域名，如 xui.example.com" style="width:300px" size="small" />
           <el-button type="primary" size="small" @click="handleSetProxy" :loading="setting" :disabled="!status.installed">
@@ -97,6 +144,7 @@ import { get, post, del } from '../api'
 const status = reactive({
   installed: false, running: false, version: null, port: null,
   memory: null, cpu: null, uptime: null, installPath: null,
+  webPath: null, directUrl: null, serverIP: null,
   proxyUrl: null, proxyDomain: null
 })
 const proxyDomain = ref('')
@@ -110,6 +158,12 @@ async function fetchStatus() {
     const res = await get('/xui/status')
     Object.assign(status, res)
   } catch {}
+}
+
+function openDirectUrl() {
+  if (status.directUrl) {
+    window.open(status.directUrl, '_blank')
+  }
 }
 
 async function handleSetProxy() {
@@ -166,12 +220,46 @@ function formatUptime(seconds) {
   font-weight: 600;
   color: #303133;
 }
-.detail-card {
-  margin: 16px 0;
+.section-card {
+  margin-top: 16px;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.direct-access {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+}
+.access-alert {
+  width: 100%;
+}
+.access-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #606266;
+}
+.info-label {
+  color: #909399;
+}
+.info-value {
+  background: #f5f7fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
 }
 .proxy-empty {
   color: #909399;
   margin-bottom: 12px;
+  font-size: 13px;
 }
 .proxy-form {
   display: flex;

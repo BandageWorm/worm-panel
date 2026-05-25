@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const nginx = require('../services/nginx');
+const acme = require('../services/acme');
 const logger = require('../utils/logger');
 
 const router = Router();
@@ -27,7 +28,18 @@ router.post('/sites', (req, res) => {
     if (!domain || !targetPort) {
       return res.status(400).json({ error: '域名和目标端口不能为空' });
     }
-    const result = nginx.createSite({ domain, targetPort, ssl });
+
+    let certPath, keyPath;
+    if (ssl) {
+      const certInfo = acme.getCertInfo(domain);
+      if (!certInfo) {
+        return res.status(400).json({ error: `域名 ${domain} 的证书不存在，请先在 SSL 证书页面申请` });
+      }
+      certPath = certInfo.certPath;
+      keyPath = certInfo.keyPath;
+    }
+
+    const result = nginx.createSite({ domain, targetPort, ssl, certPath, keyPath });
     const status = nginx.getStatus();
     res.json({ success: true, ...result, nginxStatus: status });
   } catch (err) {
@@ -62,11 +74,17 @@ router.delete('/sites/:name', (req, res) => {
 
 router.post('/reload', (req, res) => {
   const result = nginx.reload();
+  if (!result.success) {
+    logger.error('Nginx', `重载失败: ${result.message}`);
+  }
   res.json(result);
 });
 
 router.post('/validate', (req, res) => {
   const result = nginx.validate();
+  if (!result.valid) {
+    logger.error('Nginx', `配置校验失败: ${result.message}`);
+  }
   res.json(result);
 });
 

@@ -4,3 +4,4 @@ public/
 client/node_modules/
 client/dist/
 *.log
+data/ssl

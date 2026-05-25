@@ -92,7 +92,7 @@ function getSite(name) {
   return fs.readFileSync(filePath, 'utf8');
 }
 
-function createSite({ domain, targetPort, ssl }) {
+function createSite({ domain, targetPort, ssl, certPath, keyPath }) {
   const sitesPath = getSitesPath();
   const fileName = domain.replace(/[^a-zA-Z0-9.-]/g, '') + '.conf';
   const filePath = path.join(sitesPath, fileName);
@@ -100,12 +100,15 @@ function createSite({ domain, targetPort, ssl }) {
   // Use template with SSL if configured with cert, otherwise plain HTTP
   let configText;
   if (ssl) {
+    if (!certPath || !keyPath) {
+      throw new Error('启用 SSL 但未提供证书路径，请先在 SSL 证书页面申请证书');
+    }
     configText = `server {
     listen 443 ssl;
     server_name ${domain};
 
-    ssl_certificate     /root/.acme.sh/${domain}/fullchain.cer;
-    ssl_certificate_key /root/.acme.sh/${domain}/${domain}.key;
+    ssl_certificate     ${certPath};
+    ssl_certificate_key ${keyPath};
 
     location / {
         proxy_pass http://127.0.0.1:${targetPort};

@@ -2,15 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx openspec *)",
-      "Bash(which python *)",
-      "Read(//usr/local/**)",
-      "Bash(\"C:/Program Files/nodejs/node.exe\" --version)",
-      "Bash(\"C:/Program Files/nodejs/npx.cmd\" --version)",
-      "Bash(\"C:/Users/gaokun/AppData/Roaming/npm/npx.cmd\" --version)",
-      "Bash(cmd.exe /c \"cd /d d:\\\\script\\\\worm_panel && npx openspec --help\")",
-      "Bash(bash --version)",
-      "Bash(wsl ls *)",
-      "Bash(journalctl -u worm-panel --no-pager -n 50)"
-    ]
+      "Bash(ssh root@38.47.114.109 *)"
+    ],
+    "mode": "yolo"
   }
 }

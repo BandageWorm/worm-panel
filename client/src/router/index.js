@@ -15,7 +15,7 @@ const routes = [
       { path: 'pm2', component: () => import('../views/Pm2Manager.vue'), meta: { title: 'PM2 管理' } },
       { path: 'workers', component: () => import('../views/WorkersManager.vue'), meta: { title: 'Workers' } },
       { path: 'xui', component: () => import('../views/XuiManager.vue'), meta: { title: '3X-UI' } },
-      { path: 'settings', component: () => import('../views/Placeholder.vue'), meta: { title: '系统设置' } }
+      { path: 'settings', component: () => import('../views/Settings.vue'), meta: { title: '系统设置' } }
     ]
   }
 ]

@@ -56,9 +56,11 @@ function listCerts() {
     if (!fs.statSync(itemPath).isDirectory()) continue;
     if (item.startsWith('.')) continue;
 
+    // ECC 证书目录名带 _ecc 后缀，但内部文件名使用原始域名
+    const keyName = item.endsWith('_ecc') ? item.slice(0, -4) : item;
     const fullchainPath = path.join(itemPath, 'fullchain.cer');
-    const keyPath = path.join(itemPath, `${item}.key`);
-    const metaFile = path.join(itemPath, `${item}.conf`);
+    const keyPath = path.join(itemPath, `${keyName}.key`);
+    const metaFile = path.join(itemPath, `${keyName}.conf`);
 
     if (!fs.existsSync(fullchainPath)) continue;
 
@@ -99,8 +101,7 @@ function listCerts() {
 }
 
 function issueCert(domain) {
-  // 优先使用 nginx 模式（无需停服，但需要已存在该域名的 nginx 配置）
-  // 如果配置不存在，回退到 standalone 模式，临时停 nginx 以释放 80 端口
+  // 使用 Let's Encrypt CA（acme.sh 默认已改为 ZeroSSL，后者需邮箱注册）
   let useNginx = false;
   try {
     const sites = nginx.listSites();
@@ -109,11 +110,9 @@ function issueCert(domain) {
 
   let args;
   if (useNginx) {
-    // 已有 nginx 站点配置 → nginx 模式，无需停服
-    args = `--issue -d "${domain}" --nginx`;
+    args = `--issue -d "${domain}" --nginx --server letsencrypt`;
   } else {
-    // 无站点配置 → standalone 模式，临时关闭 nginx
-    args = `--issue -d "${domain}" --standalone --pre-hook "systemctl stop nginx 2>/dev/null || service nginx stop 2>/dev/null || true" --post-hook "systemctl start nginx 2>/dev/null || service nginx start 2>/dev/null || true"`;
+    args = `--issue -d "${domain}" --standalone --server letsencrypt --pre-hook "systemctl stop nginx 2>/dev/null || service nginx stop 2>/dev/null || true" --post-hook "systemctl start nginx 2>/dev/null || service nginx start 2>/dev/null || true"`;
   }
 
   const out = acmeExec(args);
@@ -129,9 +128,9 @@ function renewCert(domain) {
 
   let args;
   if (useNginx) {
-    args = `--renew -d "${domain}" --nginx`;
+    args = `--renew -d "${domain}" --nginx --server letsencrypt`;
   } else {
-    args = `--renew -d "${domain}" --standalone --pre-hook "systemctl stop nginx 2>/dev/null || service nginx stop 2>/dev/null || true" --post-hook "systemctl start nginx 2>/dev/null || service nginx start 2>/dev/null || true"`;
+    args = `--renew -d "${domain}" --standalone --server letsencrypt --pre-hook "systemctl stop nginx 2>/dev/null || service nginx stop 2>/dev/null || true" --post-hook "systemctl start nginx 2>/dev/null || service nginx start 2>/dev/null || true"`;
   }
 
   const out = acmeExec(args);
@@ -142,7 +141,7 @@ function renewCert(domain) {
 
 function getCertInfo(domain) {
   const certs = listCerts();
-  return certs.find(c => c.domain === domain) || null;
+  return certs.find(c => c.domain === domain || c.domain === `${domain}_ecc`) || null;
 }
 
 function applyToNginx(domain, targetPort) {

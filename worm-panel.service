@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/worm-panel
-ExecStart=/root/.nvm/nvm-exec node app.js
+ExecStart=/usr/bin/node /opt/worm-panel/app.js
 Restart=always
 RestartSec=5
 User=root

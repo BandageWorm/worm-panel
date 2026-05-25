@@ -50,7 +50,7 @@ router.post('/setup', async (req, res) => {
       domain: cfg.domain,
       message: domain
         ? `面板已配置完成，请通过 https://${domain} 访问`
-        : `面板已配置完成，请通过 http://${cfg.mode === 'proxy' ? '127.0.0.1' : '服务器IP'}:${cfg.port} 访问`
+        : `面板已配置完成，请通过 https://${cfg.mode === 'proxy' ? '127.0.0.1' : '服务器IP'}:${cfg.port} 访问`
     });
   } catch (err) {
     logger.error('Setup', '初始化设置失败', err);

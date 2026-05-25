@@ -2,19 +2,25 @@ function ts() {
   return new Date().toISOString().replace('T', ' ').replace('Z', '');
 }
 
-function log(level, tag, msg, err) {
-  const extra = err ? (err.stack ? '\n' + err.stack : '') : '';
-  process.stderr.write(`[${ts()}] [${level}] [${tag}] ${msg}${extra}\n`);
+function write(level, tag, text) {
+  console.error(`[${ts()}] [${level}] [${tag}] ${text}`);
 }
 
 module.exports = {
   info(tag, msg) {
-    log('INFO', tag, msg);
+    write('INFO', tag, msg);
   },
   warn(tag, msg) {
-    log('WARN', tag, msg);
+    write('WARN', tag, msg);
   },
   error(tag, msg, err) {
-    log('ERROR', tag, msg, err || null);
+    let text = msg;
+    if (err) {
+      text += ' → ' + (err.message || err);
+      if (err.stack) {
+        text += '\n' + err.stack;
+      }
+    }
+    write('ERROR', tag, text);
   }
 };

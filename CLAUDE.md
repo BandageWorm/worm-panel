@@ -41,6 +41,9 @@
 - 测试方式: WSL2 中启动 `node app.js` → Windows 浏览器访问 `http://wsl.localhost:4567`
 - 前端修改后需 `cd client && npm run build` 重新构建
 - acme.sh 和 3X-UI 功能无法在 WSL2 中完整测试，需真实服务器
+- **测试永远只在 WSL2 里进行**，不得在 Windows 原生环境运行
+- **部署永远只在 Ubuntu 服务器**，通过 `scripts/redeploy.sh` 部署到 `/opt/worm-panel`
+- **命令行工具永远在 WSL2 里使用**，包括 curl、git、node、nvm 等
 
 ## 目录结构
 
