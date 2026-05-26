@@ -45,10 +45,6 @@
           <el-icon><Cpu /></el-icon>
           <span>PM2</span>
         </el-menu-item>
-        <el-menu-item index="/workers">
-          <el-icon><Cloudy /></el-icon>
-          <span>Workers</span>
-        </el-menu-item>
         <el-menu-item index="/xui">
           <el-icon><Grid /></el-icon>
           <span>3X-UI</span>

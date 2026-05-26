@@ -11,7 +11,7 @@ const DEFAULT_CONFIG = {
   mode: 'standalone',
   domain: null,
   passwordHash: '',
-  setupToken: null
+  setupToken: null,
 };
 
 function ensureDataDir() {

@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 
 const ECOSYSTEM_PATHS = [
   path.join(__dirname, '..', '..', 'ecosystem.config.js'),
@@ -46,9 +45,22 @@ function disconnect() {
   }
 }
 
+function bindClient() {
+  const c = getClient();
+  return {
+    list: promisify(c.list.bind(c)),
+    restart: promisify(c.restart.bind(c)),
+    stop: promisify(c.stop.bind(c)),
+    reload: promisify(c.reload.bind(c)),
+    delete: promisify(c.delete.bind(c)),
+    start: promisify(c.start.bind(c))
+  };
+}
+
 async function list() {
   await connect();
-  const processes = await promisify(getClient().list)();
+  const client = bindClient();
+  const processes = await client.list();
   disconnect();
   return processes.map(p => ({
     name: p.name,
@@ -66,42 +78,107 @@ async function list() {
 
 async function restart(name) {
   await connect();
-  await promisify(getClient().restart)(name);
+  const client = bindClient();
+  await client.restart(name);
   disconnect();
 }
 
 async function stop(name) {
   await connect();
-  await promisify(getClient().stop)(name);
+  const client = bindClient();
+  await client.stop(name);
   disconnect();
 }
 
 async function reload(name) {
   await connect();
-  await promisify(getClient().reload)(name);
+  const client = bindClient();
+  await client.reload(name);
   disconnect();
 }
 
-function getLogs(name, lines = 200) {
-  const logDir = path.join(process.env.HOME || '/root', '.pm2', 'logs');
-  const logFile = path.join(logDir, `${name}-out.log`);
+async function removeProcess(name) {
+  await connect();
+  const client = bindClient();
+  await client.delete(name);
+  disconnect();
+}
 
-  if (!fs.existsSync(logFile)) {
-    // Try pm2 CLI fallback
-    try {
-      const out = execSync(`pm2 logs ${name} --lines ${lines} --nostream 2>&1`, {
-        encoding: 'utf8',
-        timeout: 5000
-      });
-      return out;
-    } catch {
-      throw new Error('日志文件不存在');
+const LOG_DIRS = [
+  path.join(process.env.HOME || '/root', '.pm2', 'logs'),
+  '/opt/worm-panel/data/logs',
+  '/root/worm-panel/data/logs'
+];
+
+function clearLogs(name) {
+  let deleted = false;
+  for (const logDir of LOG_DIRS) {
+    for (const suffix of ['-out.log', '-error.log']) {
+      const logFile = path.join(logDir, `${name}${suffix}`);
+      if (fs.existsSync(logFile)) {
+        fs.unlinkSync(logFile);
+        deleted = true;
+      }
+    }
+  }
+  return deleted;
+}
+
+function getLogs(name, lines = 200) {
+  for (const logDir of LOG_DIRS) {
+    const logFile = path.join(logDir, `${name}-out.log`);
+    if (fs.existsSync(logFile)) {
+      const content = fs.readFileSync(logFile, 'utf8');
+      const logLines = content.split('\n').filter(Boolean);
+      return logLines.slice(-lines).join('\n');
     }
   }
 
-  const content = fs.readFileSync(logFile, 'utf8');
-  const logLines = content.split('\n').filter(Boolean);
-  return logLines.slice(-lines).join('\n');
+  throw new Error('日志文件不存在');
+}
+
+async function describe(name) {
+  await connect();
+  const client = bindClient();
+  const processes = await client.list();
+  disconnect();
+  const proc = processes.find(p => p.name === name);
+  if (!proc) throw new Error(`进程 ${name} 不存在`);
+  return proc;
+}
+
+async function updateProcess(name, updates) {
+  await connect();
+  const client = bindClient();
+
+  // Get current process to read existing props
+  const processes = await client.list();
+  const proc = processes.find(p => p.name === name);
+
+  // Delete old process
+  try { await client.delete(name); } catch {}
+
+  // Build new start options
+  const options = {
+    script: updates.script || proc?.pm2_env?.pm_exec_path || name,
+    name: updates.name || name,
+    cwd: updates.cwd || proc?.pm2_env?.pm_cwd || process.cwd(),
+    interpreter: updates.interpreter || proc?.pm2_env?.exec_interpreter || undefined,
+    env: proc?.pm2_env?.env || {},
+    log_date_format: 'MM-DD HH:mm:ss'
+  };
+  if (updates.args) {
+    options.args = typeof updates.args === 'string'
+      ? updates.args.split(' ').filter(Boolean)
+      : updates.args;
+  }
+  if (updates.name && updates.name !== name) {
+    options.name = updates.name;
+  }
+
+  await client.start(options);
+  disconnect();
+  return options;
 }
 
 function getConfigPath() {
@@ -123,4 +200,4 @@ function saveConfig(content) {
   return configPath;
 }
 
-module.exports = { list, restart, stop, reload, getLogs, getConfig, saveConfig };
+module.exports = { list, restart, stop, reload, describe, updateProcess, removeProcess, getLogs, clearLogs, getConfig, saveConfig };

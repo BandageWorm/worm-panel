@@ -43,8 +43,6 @@ rsync -a --delete \
 
 mkdir -p "$INSTALL_DIR/data/notes"
 mkdir -p "$INSTALL_DIR/data/backups/nginx"
-mkdir -p "$INSTALL_DIR/data/logs/workers"
-mkdir -p "$INSTALL_DIR/data/workers"
 
 log_ok "Files copied"
 

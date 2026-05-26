@@ -39,12 +39,12 @@ function createApp() {
   app.use('/api/ssl', authMiddleware, require('./routes/ssl'));
   app.use('/api/notes', authMiddleware, require('./routes/notes'));
   app.use('/api/pm2', authMiddleware, require('./routes/pm2'));
-  app.use('/api/workers', authMiddleware, require('./routes/workers'));
   app.use('/api/xui', authMiddleware, require('./routes/xui'));
   app.use('/api/settings', authMiddleware, require('./routes/settings'));
   app.use('/api/files', authMiddleware, require('./routes/files'));
 
   app.use('/api/sync', authMiddleware, require('./routes/sync'));
+  app.use('/api/gitworker', authMiddleware, require('./routes/gitworker'));
 
   // Drive — 备份盘
   const driveRoute = require('./routes/drive');

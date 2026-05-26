@@ -24,7 +24,7 @@ router.get('/sites/:name', (req, res) => {
 
 router.post('/sites', (req, res) => {
   try {
-    const { domain, targetPort, ssl } = req.body;
+    const { domain, targetPort, ssl, sslRedirect } = req.body;
     if (!domain || !targetPort) {
       return res.status(400).json({ error: '域名和目标端口不能为空' });
     }
@@ -39,7 +39,7 @@ router.post('/sites', (req, res) => {
       keyPath = certInfo.keyPath;
     }
 
-    const result = nginx.createSite({ domain, targetPort, ssl, certPath, keyPath });
+    const result = nginx.createSite({ domain, targetPort, ssl, sslRedirect, certPath, keyPath });
     const status = nginx.getStatus();
     res.json({ success: true, ...result, nginxStatus: status });
   } catch (err) {

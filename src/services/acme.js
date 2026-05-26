@@ -115,7 +115,18 @@ function issueCert(domain) {
     args = `--issue -d "${domain}" --standalone --server letsencrypt --pre-hook "systemctl stop nginx 2>/dev/null || service nginx stop 2>/dev/null || true" --post-hook "systemctl start nginx 2>/dev/null || service nginx start 2>/dev/null || true"`;
   }
 
-  const out = acmeExec(args);
+  let out;
+  try {
+    out = acmeExec(args);
+  } catch (e) {
+    // acme.sh 可能因各种警告（如 renewal 相关）退出非零码，但证书实际已签发
+    // 检查证书文件是否存在，存在则视为成功
+    const cert = getCertInfo(domain);
+    if (cert) {
+      return { success: true, message: '证书已存在: ' + (e.message || '').trim() };
+    }
+    throw e;
+  }
   return { success: true, message: out.trim() };
 }
 

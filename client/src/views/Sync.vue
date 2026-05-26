@@ -824,10 +824,12 @@ onMounted(() => {
   }
   .status-actions {
     flex-direction: column;
+    align-items: stretch;
   }
   .status-actions .el-button {
-    width: 100%;
-    justify-content: center;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
   .setup-steps {
     max-width: 100%;

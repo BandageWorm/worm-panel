@@ -7,8 +7,8 @@
       </el-tag>
       <span class="status-msg">{{ statusMsg || '获取状态中...' }}</span>
       <div class="status-actions">
-        <el-button size="small" @click="handleValidate">校验配置</el-button>
-        <el-button size="small" type="warning" @click="handleReload" :loading="reloading">重载</el-button>
+        <el-button size="small" plain @click="handleValidate">校验配置</el-button>
+        <el-button size="small" plain type="warning" @click="handleReload" :loading="reloading">重载</el-button>
       </div>
     </div>
 
@@ -29,15 +29,18 @@
           <el-table-column label="状态" width="80">
             <template #default="{ row }">
               <el-tag v-if="row.isSelfManaged" size="small" type="info">只读</el-tag>
+              <el-tag v-else size="small" type="success">正常</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="80" :fixed="isMobile ? false : 'right'">
             <template #default="{ row }">
+              <div class="actions-wrap">
               <el-button
                 size="small" plain type="danger"
                 :disabled="row.isSelfManaged"
                 @click.stop="confirmDelete(row)"
               >删除</el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -52,7 +55,9 @@
           <el-table-column prop="updatedAt" label="备份时间" width="180" />
           <el-table-column label="操作" width="80">
             <template #default="{ row }">
+              <div class="actions-wrap">
               <el-button size="small" plain type="primary" @click="viewBackup(row)">查看</el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -70,6 +75,9 @@
         </el-form-item>
         <el-form-item>
           <el-checkbox v-model="addForm.ssl">启用 SSL（要求证书已存在）</el-checkbox>
+        </el-form-item>
+        <el-form-item v-if="addForm.ssl">
+          <el-checkbox v-model="addForm.sslRedirect">HTTP 自动跳转 HTTPS</el-checkbox>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -134,7 +142,7 @@ const activeTab = ref('sites')
 // Add
 const showAddDialog = ref(false)
 const adding = ref(false)
-const addForm = ref({ domain: '', targetPort: 3000, ssl: false })
+const addForm = ref({ domain: '', targetPort: 3000, ssl: false, sslRedirect: true })
 
 // Editor
 const showEditor = ref(false)
@@ -199,7 +207,7 @@ async function handleAdd() {
     const res = await post('/nginx/sites', addForm.value)
     ElMessage.success(`站点 ${res.fileName} 创建成功`)
     showAddDialog.value = false
-    addForm.value = { domain: '', targetPort: 3000, ssl: false }
+    addForm.value = { domain: '', targetPort: 3000, ssl: false, sslRedirect: true }
     fetchSites()
     fetchStatus()
   } catch (e) {
@@ -299,6 +307,15 @@ function formatBytes(bytes) {
 }
 .editor-tip {
   margin-bottom: 12px;
+}
+.actions-wrap {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+.actions-wrap .el-button--small {
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 @media (max-width: 768px) {

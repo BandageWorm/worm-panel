@@ -10,8 +10,9 @@
       </template>
       <el-form :model="form" label-position="top" class="settings-form">
         <el-form-item label="面板端口">
-          <el-input-number
-            v-model="form.port"
+          <el-input
+            v-model.number="form.port"
+            type="number"
             :min="1024"
             :max="65535"
             style="width:200px"
@@ -20,18 +21,18 @@
         </el-form-item>
 
         <el-form-item label="面板模式">
-          <el-radio-group v-model="form.mode">
+          <el-radio-group v-model="form.mode" class="vertical-radio-group">
             <el-radio value="standalone">
-              <div class="radio-option">
-                <span class="radio-label">Standalone</span>
-                <span class="radio-desc">面板直接监听端口，自签 HTTPS</span>
-              </div>
+              Standalone
+              <el-tooltip content="面板直接监听端口，自签 HTTPS" placement="right">
+                <el-icon class="mode-tip-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
             </el-radio>
             <el-radio value="proxy">
-              <div class="radio-option">
-                <span class="radio-label">Proxy</span>
-                <span class="radio-desc">面板监听 127.0.0.1，由 Nginx 反代提供 HTTPS</span>
-              </div>
+              Proxy
+              <el-tooltip content="面板监听 127.0.0.1，由 Nginx 反代提供 HTTPS" placement="right">
+                <el-icon class="mode-tip-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
             </el-radio>
           </el-radio-group>
           <div class="form-tip">切换模式后需重启面板生效</div>
@@ -101,6 +102,7 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, put, post } from '../api'
+import { QuestionFilled } from '@element-plus/icons-vue'
 
 const saving = ref(false)
 const changingPwd = ref(false)
@@ -207,9 +209,15 @@ async function confirmRestart() {
 <style scoped>
 .settings-page {
   max-width: 720px;
+  margin: 0 auto;
 }
 .settings-card {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  border-radius: 10px;
+  transition: box-shadow 0.2s;
+}
+.settings-card:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 .card-header {
   display: flex;
@@ -224,25 +232,43 @@ async function confirmRestart() {
 .form-tip {
   font-size: 12px;
   color: #909399;
-  margin-top: 4px;
+  margin-top: 6px;
+  line-height: 1.4;
 }
-.radio-option {
+.mode-tip-icon {
+  color: #909399;
+  font-size: 14px;
+  cursor: help;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* Vertical radio group */
+.vertical-radio-group {
   display: flex;
   flex-direction: column;
+  gap: 14px;
 }
-.radio-label {
+.vertical-radio-group :deep(.el-radio) {
+  height: auto;
+  margin-right: 0;
+  align-items: center;
+}
+.vertical-radio-group :deep(.el-radio__label) {
+  white-space: normal;
   font-size: 14px;
-  font-weight: 500;
 }
-.radio-desc {
+.vertical-radio-group :deep(.el-radio__description) {
   font-size: 12px;
   color: #909399;
+  margin-top: 2px;
 }
+
 .actions-bar {
   display: flex;
   gap: 12px;
-  padding-top: 8px;
-  margin-bottom: 16px;
+  padding-top: 4px;
+  margin-bottom: 20px;
 }
 
 @media (max-width: 768px) {
@@ -252,11 +278,7 @@ async function confirmRestart() {
   .settings-form {
     max-width: 100%;
   }
-  .settings-form .el-input,
-  .settings-form .el-input-number,
-  .settings-form :deep(.el-input) {
-    width: 100% !important;
-  }
+  .settings-form :deep(.el-input),
   .settings-form :deep(.el-input-number) {
     width: 100% !important;
   }

@@ -5,6 +5,7 @@ const config = require('./config');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups', 'nginx');
+const DEFAULT_SITE_DIR = path.join(DATA_DIR, 'default-site');
 const MAX_BACKUPS = 30;
 
 const SITES_ENABLED = '/etc/nginx/sites-enabled';
@@ -36,19 +37,15 @@ function ensureBackupDir() {
 // ── Status ──
 
 function getStatus() {
-  // Check if nginx process is actually running
+  // Check if nginx process is running (works without pidof/pgrep)
   let running = false;
   try {
-    const out = nginxExec('pidof nginx 2>/dev/null || pgrep -x nginx 2>/dev/null || echo ""');
-    running = out.trim().length > 0;
+    const out = execSync('ps aux 2>/dev/null | grep -c "[n]ginx"', {
+      encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe']
+    });
+    running = parseInt(out.trim(), 10) > 0;
   } catch {
-    // pidof/pgrep not available — fall back to pgrep
-    try {
-      const out = nginxExec('pgrep -x nginx 2>&1');
-      running = out.trim().length > 0;
-    } catch {
-      running = false;
-    }
+    running = false;
   }
 
   // Also validate config
@@ -95,7 +92,7 @@ function listSites() {
       serverName,
       listen,
       proxyPass,
-      isSelfManaged: file === 'panel.conf',
+      isSelfManaged: file === 'panel.conf' || file === 'default.conf',
       updatedAt: stat.mtime.toISOString()
     });
   }
@@ -112,7 +109,7 @@ function getSite(name) {
   return fs.readFileSync(filePath, 'utf8');
 }
 
-function createSite({ domain, targetPort, ssl, certPath, keyPath }) {
+function createSite({ domain, targetPort, ssl, sslRedirect, certPath, keyPath }) {
   const sitesPath = getSitesPath();
   const fileName = domain.replace(/[^a-zA-Z0-9.-]/g, '') + '.conf';
   const filePath = path.join(sitesPath, fileName);
@@ -123,6 +120,24 @@ function createSite({ domain, targetPort, ssl, certPath, keyPath }) {
     if (!certPath || !keyPath) {
       throw new Error('启用 SSL 但未提供证书路径，请先在 SSL 证书页面申请证书');
     }
+
+    const httpBlock = sslRedirect === false ? `server {
+    listen 80;
+    server_name ${domain};
+
+    location / {
+        proxy_pass http://127.0.0.1:${targetPort};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}` : `server {
+    listen 80;
+    server_name ${domain};
+    return 301 https://$host$request_uri;
+}`;
+
     configText = `server {
     listen 443 ssl;
     server_name ${domain};
@@ -139,11 +154,7 @@ function createSite({ domain, targetPort, ssl, certPath, keyPath }) {
     }
 }
 
-server {
-    listen 80;
-    server_name ${domain};
-    return 301 https://$host$request_uri;
-}
+${httpBlock}
 `;
   } else {
     configText = `server {
@@ -161,12 +172,29 @@ server {
 `;
   }
 
+  // Backup existing config if any
+  ensureBackupDir();
+  if (fs.existsSync(filePath)) {
+    const backupName = `${fileName}.${formatTimestamp()}.bak`;
+    fs.copyFileSync(filePath, path.join(BACKUP_DIR, backupName));
+    cleanupOldBackups();
+  }
+
+  // Write and validate
   fs.writeFileSync(filePath, configText, 'utf8');
+  try {
+    nginxExec('nginx -t 2>&1');
+  } catch (e) {
+    fs.unlinkSync(filePath);
+    throw new Error((e.stderr || e.stdout || '').trim() || 'nginx 配置校验失败');
+  }
+
+  reload();
   return { fileName, configText };
 }
 
 function updateSite(name, content) {
-  if (name === 'panel.conf') {
+  if (name === 'panel.conf' || name === 'default.conf') {
     throw new Error('面板自身配置不可编辑');
   }
 
@@ -199,7 +227,7 @@ function updateSite(name, content) {
 }
 
 function deleteSite(name) {
-  if (name === 'panel.conf') {
+  if (name === 'panel.conf' || name === 'default.conf') {
     throw new Error('面板自身配置不可删除');
   }
 
@@ -282,6 +310,64 @@ function writeSelfConfig() {
   fs.writeFileSync(selfPath, content, 'utf8');
 }
 
+const DEFAULT_HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>404 Not Found</title>
+<style>
+body{font-family:sans-serif;background:#fff;color:#333;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.container{text-align:center;padding:40px 20px}
+.code{font-size:72px;font-weight:700;color:#e74c3c;line-height:1.2}
+.msg{font-size:16px;color:#666;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="code">404</div>
+<div class="msg">Not Found</div>
+</div>
+</body>
+</html>`;
+
+function writeDefaultConfig() {
+  const sitesPath = getSitesPath();
+  if (!fs.existsSync(sitesPath)) {
+    fs.mkdirSync(sitesPath, { recursive: true });
+  }
+
+  // Remove legacy nginx default site (e.g. /etc/nginx/sites-enabled/default) to avoid default_server conflict
+  const legacyDefault = path.join(sitesPath, 'default');
+  if (fs.existsSync(legacyDefault)) {
+    try { fs.unlinkSync(legacyDefault); } catch {}
+  }
+
+  // Ensure the default HTML page exists
+  if (!fs.existsSync(DEFAULT_SITE_DIR)) {
+    fs.mkdirSync(DEFAULT_SITE_DIR, { recursive: true });
+  }
+  const indexPath = path.join(DEFAULT_SITE_DIR, 'index.html');
+  if (!fs.existsSync(indexPath)) {
+    fs.writeFileSync(indexPath, DEFAULT_HTML, 'utf8');
+  }
+
+  const defaultPath = path.join(sitesPath, 'default.conf');
+  const content = `server {
+    listen 80 default_server;
+    server_name _;
+
+    root ${DEFAULT_SITE_DIR};
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+`;
+  fs.writeFileSync(defaultPath, content, 'utf8');
+}
+
 // ── Backups ──
 
 function listBackups() {
@@ -328,6 +414,6 @@ function formatTimestamp() {
 
 module.exports = {
   getStatus, listSites, getSite, createSite, updateSite, deleteSite,
-  validate, reload, writeSelfConfig,
+  validate, reload, writeSelfConfig, writeDefaultConfig,
   listBackups, getBackup
 };

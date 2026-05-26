@@ -53,7 +53,7 @@ SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # ── Node.js (always use nvm) ──
 
 install_nodejs() {
-  log_info "Installing nvm and Node.js 20.x..."
+  log_info "Installing nvm and Node.js 22.x..."
 
   # Install nvm (idempotent - safe to re-run)
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
@@ -62,9 +62,9 @@ install_nodejs() {
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-  # Install and use Node.js 20
-  nvm install 20
-  nvm alias default 20
+  # Install and use Node.js 22
+  nvm install 22
+  nvm alias default 22
 
   # Symlink nvm's node to /usr/bin/node for systemd service
   ln -sf "$(which node)" /usr/bin/node
@@ -99,27 +99,17 @@ if ! command -v git &> /dev/null; then
   apt-get install -y git
 fi
 
-# ── Wrangler (Cloudflare Workers CLI) ──
+# ── 全局 Node 依赖（pm2 进程管理、wrangler Workers 本地运行） ──
 
-if ! command -v wrangler &> /dev/null; then
-  log_info "Installing wrangler..."
+log_info "Installing global Node.js packages (pm2, wrangler)..."
 
-  # 确保使用 nvm 的 npm（系统 npm 可能损坏）
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+# 确保使用 nvm 的 npm（系统 npm 可能损坏）
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-  npm install -g wrangler
+npm install -g pm2 wrangler ws
 
-  # 创建软链，systemd 服务才能找到
-  WRANGLER_PATH="$(which wrangler 2>/dev/null)"
-  if [ -n "$WRANGLER_PATH" ] && [ "$WRANGLER_PATH" != "/usr/local/bin/wrangler" ]; then
-    ln -sf "$WRANGLER_PATH" /usr/local/bin/wrangler
-  fi
-
-  log_ok "wrangler installed"
-else
-  log_ok "wrangler is already installed"
-fi
+log_ok "Global packages installed (pm2, wrangler)"
 
 # ── rclone (云备份) ──
 
@@ -192,8 +182,6 @@ log_info "Setting up directory structure at $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR/data/notes"
 mkdir -p "$INSTALL_DIR/data/backups/nginx"
-mkdir -p "$INSTALL_DIR/data/logs/workers"
-mkdir -p "$INSTALL_DIR/data/workers"
 
 # ── Copy Files ──
 
@@ -297,5 +285,13 @@ if command -v aliyundrive-webdav &> /dev/null; then
   echo -e "    aliyundrive-webdav qr login        # 扫码登录阿里云盘"
   echo -e "    systemctl start aliyundrive-webdav  # 启动 WebDAV 服务"
   echo -e "    # 先编辑: /etc/aliyundrive-webdav.conf 设置端口和密码"
+  echo ""
+fi
+
+if command -v wrangler &> /dev/null; then
+  echo -e "  ${CYAN}Wrangler (Cloudflare Workers 本地运行):${NC}"
+  echo -e "    # 在 PM2 中运行 Worker 项目:"
+  echo -e "    npx wrangler dev <entry> --port <port>"
+  echo -e "    # 然后在面板 PM2 页面中管理进程"
   echo ""
 fi

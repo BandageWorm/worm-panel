@@ -23,7 +23,7 @@ const host = cfg.mode === 'proxy' ? '127.0.0.1' : '0.0.0.0';
 
 // Generate self-managed nginx config if in proxy mode
 if (cfg.initialized) {
-  try { nginx.writeSelfConfig(); } catch (e) { logger.warn('App', '写入 nginx 自管配置失败 (可能未安装 nginx)'); }
+  try { nginx.writeSelfConfig(); nginx.writeDefaultConfig(); } catch (e) { logger.warn('App', '写入 nginx 配置失败 (可能未安装 nginx)'); }
 }
 
 const app = createApp();
