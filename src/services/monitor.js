@@ -85,4 +85,12 @@ async function getUptime() {
   return time.uptime;
 }
 
-module.exports = { getSystemInfo, getCpuUsage, getMemoryUsage, getDiskUsage, getNetworkStats, getUptime };
+async function getNetworkInterfaces() {
+  const ifaces = await si.networkInterfaces();
+  const list = ifaces
+    .filter(n => n.ip4 && n.ip4 !== '127.0.0.1')
+    .map(n => ({ name: n.iface, ip4: n.ip4, ip6: n.ip6 }));
+  return { list, primary: list.length > 0 ? list[0].ip4 : '--' };
+}
+
+module.exports = { getSystemInfo, getCpuUsage, getMemoryUsage, getDiskUsage, getNetworkStats, getUptime, getNetworkInterfaces };

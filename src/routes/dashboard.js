@@ -7,13 +7,14 @@ const router = Router();
 
 router.get('/', async (req, res) => {
   try {
-    const [system, cpu, memory, disk, network, uptime] = await Promise.all([
+    const [system, cpu, memory, disk, network, uptime, networkIfaces] = await Promise.all([
       monitor.getSystemInfo(),
       monitor.getCpuUsage(),
       monitor.getMemoryUsage(),
       monitor.getDiskUsage(),
       monitor.getNetworkStats(),
-      monitor.getUptime()
+      monitor.getUptime(),
+      monitor.getNetworkInterfaces()
     ]);
 
     const cfg = config.load();
@@ -23,7 +24,9 @@ router.get('/', async (req, res) => {
         os: system.os,
         kernel: system.kernel,
         hostname: system.hostname,
-        uptime
+        uptime,
+        ip: networkIfaces.primary,
+        ipList: networkIfaces.list
       },
       cpu: {
         usage: cpu.usage,

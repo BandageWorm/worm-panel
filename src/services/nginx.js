@@ -36,17 +36,37 @@ function ensureBackupDir() {
 // ── Status ──
 
 function getStatus() {
+  // Check if nginx process is actually running
+  let running = false;
   try {
-    nginxExec('nginx -t 2>&1');
-    return { running: true, message: '配置正常' };
+    const out = nginxExec('pidof nginx 2>/dev/null || pgrep -x nginx 2>/dev/null || echo ""');
+    running = out.trim().length > 0;
   } catch {
+    // pidof/pgrep not available — fall back to pgrep
     try {
-      const out = nginxExec('nginx -t 2>&1');
-      return { running: false, message: out.trim() };
-    } catch (e) {
-      return { running: false, message: (e.stderr || e.stdout || '').trim() || 'nginx 未安装或无法运行' };
+      const out = nginxExec('pgrep -x nginx 2>&1');
+      running = out.trim().length > 0;
+    } catch {
+      running = false;
     }
   }
+
+  // Also validate config
+  let configValid = false;
+  let message = '';
+  try {
+    nginxExec('nginx -t 2>&1');
+    configValid = true;
+    message = running ? '运行正常' : '进程未运行';
+  } catch (e) {
+    const errMsg = (e.stderr || e.stdout || '').trim();
+    message = errMsg || 'nginx 配置有误';
+    if (!running) {
+      message = '进程未运行' + (errMsg ? ' — ' + errMsg : '');
+    }
+  }
+
+  return { running, configValid, message };
 }
 
 // ── Sites ──

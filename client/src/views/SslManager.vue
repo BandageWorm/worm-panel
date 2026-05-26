@@ -6,7 +6,7 @@
         <span>acme.sh 状态：</span>
         <el-tag v-if="acmeInstalled" type="success">已安装</el-tag>
         <el-tag v-else type="danger">未安装</el-tag>
-        <el-button v-if="!acmeInstalled" size="small" type="primary" style="margin-left:12px" @click="handleInstall" :loading="installing">
+        <el-button v-if="!acmeInstalled" size="small" type="primary" @click="handleInstall" :loading="installing">
           安装 acme.sh
         </el-button>
       </div>
@@ -40,10 +40,12 @@
             <el-tag v-else size="small" type="success">有效</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="130" :fixed="isMobile ? false : 'right'">
           <template #default="{ row }">
-            <el-button text size="small" @click="handleRenew(row)">续期</el-button>
-            <el-button text size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            <div class="actions-wrap">
+            <el-button size="small" plain type="primary" @click="handleRenew(row)">续期</el-button>
+            <el-button size="small" plain type="danger" @click="handleDelete(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -72,6 +74,9 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post, del } from '../api'
+import { useMobile } from '../composables/useMobile'
+
+const { isMobile } = useMobile()
 
 const acmeInstalled = ref(false)
 const installing = ref(false)
@@ -185,6 +190,7 @@ function isExpiringSoon(dateStr) {
 .status-row {
   display: flex;
   align-items: center;
+  gap: 12px;
 }
 .card-header {
   display: flex;
@@ -196,8 +202,24 @@ function isExpiringSoon(dateStr) {
   color: #909399;
   margin-top: 4px;
 }
+.actions-wrap {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+.actions-wrap .el-button--small {
+  padding-left: 4px;
+  padding-right: 4px;
+}
 
 @media (max-width: 768px) {
+  .card-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .status-row {
+    flex-wrap: wrap;
+  }
   :deep(.el-dialog) {
     width: 92% !important;
   }

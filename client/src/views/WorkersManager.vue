@@ -25,13 +25,15 @@
         <el-table-column prop="lastDeploy" label="最近部署" width="170">
           <template #default="{ row }">{{ row.lastDeploy ? formatTime(row.lastDeploy) : '未部署' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="150" :fixed="isMobile ? false : 'right'">
           <template #default="{ row }">
-            <el-button text size="small" type="primary" :loading="deploying === row.name" @click="handleDeploy(row)">
+            <div class="actions-wrap">
+            <el-button size="small" plain type="primary" :loading="deploying === row.name" @click="handleDeploy(row)">
               部署
             </el-button>
-            <el-button text size="small" @click="viewLog(row)">日志</el-button>
-            <el-button text size="small" type="danger" @click="handleRemove(row)">删除</el-button>
+            <el-button size="small" plain @click="viewLog(row)">日志</el-button>
+            <el-button size="small" plain type="danger" @click="handleRemove(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -72,6 +74,9 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post, del } from '../api'
+import { useMobile } from '../composables/useMobile'
+
+const { isMobile } = useMobile()
 
 const wranglerStatus = ref({})
 const projects = ref([])
@@ -187,6 +192,15 @@ function formatTime(iso) {
   font-family: 'Courier New', Consolas, monospace;
   white-space: pre-wrap;
 }
+.actions-wrap {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+.actions-wrap .el-button--small {
+  padding-left: 4px;
+  padding-right: 4px;
+}
 
 @media (max-width: 768px) {
   :deep(.el-dialog) {
@@ -194,6 +208,10 @@ function formatTime(iso) {
   }
   :deep(.el-table) {
     font-size: 12px;
+  }
+  .card-header {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 }
 </style>

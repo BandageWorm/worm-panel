@@ -373,7 +373,7 @@ async function handleImport(e) {
   .notes-sidebar {
     width: 100%;
     flex: none;
-    max-height: 35vh;
+    max-height: 25vh;
   }
   .notes-editor {
     flex: 1;

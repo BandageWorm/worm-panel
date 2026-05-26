@@ -44,6 +44,31 @@
       </el-col>
     </el-row>
 
+    <!-- Install Prompt -->
+    <el-card shadow="never" class="section-card" v-if="!status.installed">
+      <template #header>
+        <div class="card-header">
+          <el-icon><WarningFilled /></el-icon>
+          <span>安装 3X-UI</span>
+        </div>
+      </template>
+      <el-alert
+        title="3X-UI 面板未安装"
+        type="warning"
+        :closable="false"
+        show-icon
+        description="请在服务器上运行以下命令安装"
+        class="install-alert"
+      />
+      <div class="install-cmd">
+        <code class="cmd-line">bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)</code>
+        <el-button text size="small" @click="copyCmd">
+          <el-icon><CopyDocument /></el-icon>
+        </el-button>
+      </div>
+      <p class="install-hint">安装完成后刷新此页面</p>
+    </el-card>
+
     <!-- Direct Access -->
     <el-card shadow="never" class="section-card" v-if="status.directUrl">
       <template #header>
@@ -172,6 +197,13 @@ async function handleRemoveProxy() {
   } catch {}
   removing.value = false
 }
+
+function copyCmd() {
+  const cmd = 'bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)'
+  navigator.clipboard.writeText(cmd)
+    .then(() => ElMessage.success('安装命令已复制'))
+    .catch(() => ElMessage.error('复制失败，请手动复制'))
+}
 </script>
 
 <style scoped>
@@ -233,6 +265,29 @@ async function handleRemoveProxy() {
   margin-bottom: 12px;
   font-size: 13px;
 }
+.install-alert {
+  margin-bottom: 16px;
+}
+.install-cmd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #1a1a2e;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+.install-cmd .cmd-line {
+  flex: 1;
+  color: #67c23a;
+  font-size: 13px;
+  word-break: break-all;
+  user-select: all;
+}
+.install-hint {
+  font-size: 13px;
+  color: #909399;
+}
 .proxy-form {
   display: flex;
   gap: 8px;
@@ -254,8 +309,18 @@ async function handleRemoveProxy() {
   .proxy-form .el-input {
     width: 100% !important;
   }
+  .proxy-form .el-button {
+    width: 100%;
+  }
   .access-info {
     flex-wrap: wrap;
+    justify-content: center;
+  }
+  .direct-access .el-button {
+    width: 100%;
+  }
+  .section-card :deep(.el-descriptions__cell) {
+    word-break: break-all;
   }
 }
 </style>

@@ -39,6 +39,14 @@ apt-get update -qq
 apt-get install -y -qq curl build-essential 2>/dev/null
 log_ok "System prerequisites installed"
 
+# ── Journald 日志限制（持久配置） ──
+if ! grep -q "SystemMaxUse=20M" /etc/systemd/journald.conf 2>/dev/null; then
+  echo "SystemMaxUse=20M" >> /etc/systemd/journald.conf
+  systemctl restart systemd-journald
+  log_ok "Journald log limit set to 20MB"
+fi
+journalctl --vacuum-size=20M 2>/dev/null || true
+
 INSTALL_DIR="/opt/worm-panel"
 SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 

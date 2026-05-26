@@ -22,11 +22,13 @@
             <template #default="{ row }">{{ formatUptime(row.uptime) }}</template>
           </el-table-column>
           <el-table-column prop="restarts" label="重启次数" width="80" />
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="150" :fixed="isMobile ? false : 'right'">
             <template #default="{ row }">
-              <el-button text size="small" type="primary" @click="handleRestart(row)">重启</el-button>
-              <el-button text size="small" @click="handleReload(row)">重载</el-button>
-              <el-button text size="small" type="danger" @click="handleStop(row)">停止</el-button>
+              <div class="actions-wrap">
+              <el-button size="small" plain type="primary" @click="handleRestart(row)">重启</el-button>
+              <el-button size="small" plain type="primary" @click="handleReload(row)">重载</el-button>
+              <el-button size="small" plain type="danger" @click="handleStop(row)">停止</el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -68,6 +70,9 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post, put } from '../api'
+import { useMobile } from '../composables/useMobile'
+
+const { isMobile } = useMobile()
 
 const loading = ref(false)
 const processes = ref([])
@@ -221,6 +226,15 @@ function formatUptime(seconds) {
   font-size: 13px;
   line-height: 1.5;
 }
+.actions-wrap {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+.actions-wrap .el-button--small {
+  padding-left: 4px;
+  padding-right: 4px;
+}
 
 @media (max-width: 768px) {
   .logs-toolbar {
@@ -228,6 +242,18 @@ function formatUptime(seconds) {
   }
   .logs-toolbar .el-input {
     width: 100% !important;
+  }
+  .logs-toolbar .el-button {
+    flex: 1;
+  }
+  .refresh-bar {
+    flex-wrap: wrap;
+  }
+  .refresh-bar .el-button {
+    width: 100%;
+  }
+  .config-toolbar .el-button {
+    width: 100%;
   }
   :deep(.el-table) {
     font-size: 12px;

@@ -49,12 +49,18 @@
           <code style="font-size:12px">{{ row.mode }}</code>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="140" class-name="actions-col">
+      <el-table-column label="操作" width="110" class-name="actions-col">
         <template #default="{ row }">
           <div class="actions-wrap">
-            <el-button v-if="row.type === 'file' && isEditableFile(row.name)" text size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-if="row.type === 'file'" text size="small" @click="handleDownload(row)">下载</el-button>
-            <el-button text size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="row.type === 'file' && isEditableFile(row.name)" size="small" plain type="primary" @click="handleEdit(row)">
+              <el-icon><EditPen /></el-icon>
+            </el-button>
+            <el-button v-if="row.type === 'file'" size="small" plain @click="handleDownload(row)">
+              <el-icon><Download /></el-icon>
+            </el-button>
+            <el-button size="small" plain type="danger" @click="handleDelete(row)">
+              <el-icon><Delete /></el-icon>
+            </el-button>
           </div>
         </template>
       </el-table-column>
@@ -124,7 +130,7 @@
 <script setup>
 import { ref, computed, shallowRef, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Upload, FolderAdd, Refresh, Folder, Document, UploadFilled, EditPen } from '@element-plus/icons-vue'
+import { Upload, FolderAdd, Refresh, Folder, Document, UploadFilled, EditPen, Download, Delete } from '@element-plus/icons-vue'
 import { get, del, post, put } from '../api'
 import { Codemirror } from 'vue-codemirror'
 import { javascript } from '@codemirror/lang-javascript'
@@ -411,10 +417,12 @@ onMounted(() => {
 
 .actions-wrap {
   display: flex;
-  gap: 0;
+  gap: 4px;
+  white-space: nowrap;
 }
-.actions-wrap .el-button {
-  margin-left: 0;
+.actions-wrap .el-button--small {
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 .upload-icon {
@@ -432,6 +440,19 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .fb-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .fb-actions {
+    justify-content: stretch;
+  }
+  .fb-actions .el-button {
+    flex: 1;
+  }
+  .actions-wrap {
+    flex-wrap: wrap;
+  }
   :deep(.el-dialog) {
     width: 92% !important;
   }

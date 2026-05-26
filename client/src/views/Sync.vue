@@ -36,10 +36,10 @@
           <el-button type="primary" :loading="backingUp" @click="handleBackup" icon="Upload">
             立即备份
           </el-button>
-          <el-button :loading="restoring" @click="handleRestore" icon="Download">
+          <el-button type="success" :loading="restoring" @click="handleRestore" icon="Download">
             从云端恢复
           </el-button>
-          <el-button type="danger" plain @click="handleDisconnect" icon="Link">
+          <el-button type="danger" @click="handleDisconnect" icon="Link">
             断开连接
           </el-button>
         </div>
@@ -129,17 +129,19 @@
               {{ formatTime(row.mtime) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column label="操作" width="120" :fixed="isMobile ? false : 'right'">
             <template #default="{ row }">
-              <el-button text size="small" @click="handleDownload(row)" :disabled="row.type === 'dir'">
+              <div class="actions-wrap">
+              <el-button size="small" plain @click="handleDownload(row)" :disabled="row.type === 'dir'">
                 <el-icon><Download /></el-icon>
               </el-button>
-              <el-button text size="small" @click="startRename(row)">
+              <el-button size="small" plain @click="startRename(row)">
                 <el-icon><EditPen /></el-icon>
               </el-button>
-              <el-button text size="small" type="danger" @click="handleDelete(row)">
+              <el-button size="small" plain type="danger" @click="handleDelete(row)">
                 <el-icon><Delete /></el-icon>
               </el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -308,6 +310,9 @@ import { ref, onMounted, nextTick, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Timer, WarningFilled, Link, CopyDocument, FolderOpened, Document, Download, Delete, EditPen, Plus } from '@element-plus/icons-vue'
 import { get, post } from '../api'
+import { useMobile } from '../composables/useMobile'
+
+const { isMobile } = useMobile()
 
 const installed = ref(true)
 const connected = ref(false)
@@ -799,6 +804,15 @@ onMounted(() => {
 .rename-input {
   width: 160px;
 }
+.actions-wrap {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+.actions-wrap .el-button--small {
+  padding-left: 4px;
+  padding-right: 4px;
+}
 
 /* Responsive */
 @media (max-width: 768px) {
@@ -813,6 +827,7 @@ onMounted(() => {
   }
   .status-actions .el-button {
     width: 100%;
+    justify-content: center;
   }
   .setup-steps {
     max-width: 100%;

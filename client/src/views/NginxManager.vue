@@ -5,7 +5,7 @@
       <el-tag :type="nginxRunning ? 'success' : 'danger'" size="small">
         Nginx {{ nginxRunning ? '运行中' : '异常' }}
       </el-tag>
-      <span class="status-msg" v-if="statusMsg">{{ statusMsg }}</span>
+      <span class="status-msg">{{ statusMsg || '获取状态中...' }}</span>
       <div class="status-actions">
         <el-button size="small" @click="handleValidate">校验配置</el-button>
         <el-button size="small" type="warning" @click="handleReload" :loading="reloading">重载</el-button>
@@ -31,10 +31,10 @@
               <el-tag v-if="row.isSelfManaged" size="small" type="info">只读</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="100" fixed="right">
+          <el-table-column label="操作" width="80" :fixed="isMobile ? false : 'right'">
             <template #default="{ row }">
               <el-button
-                text size="small" type="danger"
+                size="small" plain type="danger"
                 :disabled="row.isSelfManaged"
                 @click.stop="confirmDelete(row)"
               >删除</el-button>
@@ -52,7 +52,7 @@
           <el-table-column prop="updatedAt" label="备份时间" width="180" />
           <el-table-column label="操作" width="80">
             <template #default="{ row }">
-              <el-button text size="small" @click="viewBackup(row)">查看</el-button>
+              <el-button size="small" plain type="primary" @click="viewBackup(row)">查看</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -118,6 +118,9 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post, put, del } from '../api'
+import { useMobile } from '../composables/useMobile'
+
+const { isMobile } = useMobile()
 
 const loading = ref(false)
 const reloading = ref(false)
@@ -154,8 +157,10 @@ async function fetchStatus() {
   try {
     const res = await get('/nginx/status')
     nginxRunning.value = res.running
-    statusMsg.value = res.message
-  } catch { /* nginx not installed */ }
+    statusMsg.value = res.message || (res.running ? '运行正常' : '未运行')
+  } catch {
+    statusMsg.value = '无法获取 nginx 状态'
+  }
 }
 
 async function fetchSites() {
@@ -299,10 +304,20 @@ function formatBytes(bytes) {
 @media (max-width: 768px) {
   .status-bar {
     flex-wrap: wrap;
+    gap: 8px;
   }
   .status-msg {
     width: 100%;
     order: 1;
+  }
+  .status-actions {
+    width: 100%;
+  }
+  .status-actions .el-button {
+    flex: 1;
+  }
+  .toolbar .el-button {
+    width: 100%;
   }
   :deep(.el-dialog) {
     width: 92% !important;

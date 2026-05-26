@@ -22,11 +22,34 @@ function saveProjects(projects) {
   config.save(cfg);
 }
 
+function resolvePath() {
+  const env = { ...process.env };
+  const paths = (env.PATH || '').split(path.delimiter);
+
+  const candidates = [
+    process.env.NVM_BIN,
+    process.env.NVM_DIR ? path.join(process.env.NVM_DIR, '..', 'versions', 'node', 'default', 'bin') : null,
+    path.join(process.env.HOME || '/root', '.nvm', 'versions', 'node', 'default', 'bin'),
+    path.join(process.env.HOME || '/root', '.nvm', 'versions', 'node', 'v20', 'bin'),
+  ];
+
+  candidates.push(path.dirname(process.execPath));
+
+  for (const p of candidates) {
+    if (p && fs.existsSync(p) && !paths.includes(p)) {
+      paths.unshift(p);
+    }
+  }
+
+  env.PATH = paths.join(path.delimiter);
+  return env;
+}
+
 function checkWrangler() {
   try {
-    const out = execSync('wrangler --version 2>&1', {
-      encoding: 'utf8',
-      timeout: 15000
+    const env = resolvePath();
+    const out = execSync('npx wrangler --version 2>&1 || wrangler --version 2>&1', {
+      env, encoding: 'utf8', timeout: 15000
     });
     const match = out.match(/\d+\.\d+\.\d+/);
     return { installed: true, version: match ? match[0] : out.trim() };
@@ -101,36 +124,43 @@ function deploy(name) {
   ensureDirs();
   const logFile = path.join(LOGS_DIR, `${name}.log`);
 
+  // 收集日志
+  const logs = [];
+
   // Step 1: git pull
-  let gitOutput = '';
   try {
-    gitOutput = execSync(`git pull origin ${project.branch} 2>&1`, {
+    const out = execSync(`git pull origin ${project.branch} 2>&1`, {
       cwd: localPath, encoding: 'utf8', timeout: 30000
     });
+    logs.push('=== Git Pull ===', out.trim());
   } catch (e) {
     const err = (e.stdout || e.stderr || '').trim() || 'Git pull 失败';
-    fs.writeFileSync(logFile, err, 'utf8');
+    logs.push('=== Git Pull ===', err);
+    fs.writeFileSync(logFile, logs.join('\n'), 'utf8');
     throw new Error(err);
   }
 
   // Step 2: wrangler deploy
-  let wranglerOutput = '';
+  const env = resolvePath();
   try {
-    wranglerOutput = execSync('wrangler deploy 2>&1', {
-      cwd: localPath, encoding: 'utf8', timeout: 60000
+    const out = execSync('npx wrangler deploy 2>&1', {
+      cwd: localPath, env, encoding: 'utf8', timeout: 120000
     });
+    logs.push('=== Wrangler Deploy ===', out.trim());
   } catch (e) {
-    wranglerOutput = (e.stdout || e.stderr || '').trim() || 'Wrangler deploy 失败';
+    const err = (e.stdout || e.stderr || '').trim() || 'Wrangler deploy 失败';
+    logs.push('=== Wrangler Deploy ===', err);
   }
 
-  const fullLog = `=== Git Pull ===\n${gitOutput}\n=== Wrangler Deploy ===\n${wranglerOutput}`;
+  const fullLog = logs.join('\n');
   fs.writeFileSync(logFile, fullLog, 'utf8');
 
   // Update last deploy time
   project.lastDeploy = new Date().toISOString();
   saveProjects(getProjects());
 
-  return { output: fullLog, success: !wranglerOutput.includes('FAILED') && !wranglerOutput.includes('Error') };
+  const hasError = fullLog.includes('✘') || fullLog.includes('Error') || fullLog.includes('FAILED');
+  return { output: fullLog, success: !hasError };
 }
 
 function getDeployLog(name) {

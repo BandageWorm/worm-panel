@@ -15,12 +15,20 @@
           <span class="value">{{ info.system?.kernel || '--' }}</span>
         </div>
         <div class="overview-item">
+          <span class="label">主机名</span>
+          <span class="value">{{ info.system?.hostname || '--' }}</span>
+        </div>
+        <div class="overview-item">
+          <span class="label">IP 地址</span>
+          <span class="value">{{ info.system?.ip || '--' }}</span>
+        </div>
+        <div class="overview-item">
           <span class="label">运行时间</span>
           <span class="value">{{ formatUptime(info.system?.uptime) }}</span>
         </div>
         <div class="overview-item">
-          <span class="label">主机名</span>
-          <span class="value">{{ info.system?.hostname || '--' }}</span>
+          <span class="label">面板运行</span>
+          <span class="value">{{ formatUptime(info.panel?.uptime) }}</span>
         </div>
         <div class="overview-item">
           <span class="label">面板版本</span>
@@ -88,38 +96,6 @@
       </el-card>
     </div>
 
-    <!-- Quick Links -->
-    <el-card class="quick-card" shadow="never">
-      <template #header>
-        <span class="card-title">快捷入口</span>
-      </template>
-      <div class="quick-grid">
-        <el-button class="quick-btn" @click="$router.push('/nginx')">
-          <el-icon><Connection /></el-icon>
-          Nginx 管理
-        </el-button>
-        <el-button class="quick-btn" @click="$router.push('/ssl')">
-          <el-icon><Lock /></el-icon>
-          SSL 证书
-        </el-button>
-        <el-button class="quick-btn" @click="$router.push('/notes')">
-          <el-icon><Edit /></el-icon>
-          记事本
-        </el-button>
-        <el-button class="quick-btn" @click="$router.push('/pm2')">
-          <el-icon><Cpu /></el-icon>
-          PM2
-        </el-button>
-        <el-button class="quick-btn" @click="$router.push('/workers')">
-          <el-icon><Cloudy /></el-icon>
-          Workers
-        </el-button>
-        <el-button class="quick-btn" @click="$router.push('/xui')">
-          <el-icon><Grid /></el-icon>
-          3X-UI
-        </el-button>
-      </div>
-    </el-card>
   </div>
 </template>
 
@@ -264,33 +240,14 @@ onUnmounted(() => {
 .quick-card {
   margin-bottom: 20px;
 }
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 12px;
-}
-.quick-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 80px;
-  font-size: 14px;
-  flex-direction: column;
-  justify-content: center;
-}
-.quick-btn .el-icon {
-  font-size: 24px;
-}
 
 @media (max-width: 768px) {
   .overview-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
   .resource-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-  .quick-grid {
-    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -298,8 +255,8 @@ onUnmounted(() => {
   .resource-grid {
     grid-template-columns: 1fr;
   }
-  .quick-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .overview-item {
+    padding: 4px 0;
   }
 }
 </style>

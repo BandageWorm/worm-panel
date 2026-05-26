@@ -130,6 +130,9 @@ else
   log_error "Worm Panel failed to start, check logs: journalctl -u worm-panel -n 50 --no-pager"
 fi
 
+# ── Vacuum journal logs to 20MB ──
+journalctl --vacuum-size=20M 2>/dev/null && log_info "Journal logs vacuumed to 20MB" || true
+
 # ── Show startup logs ──
 
 echo ""
