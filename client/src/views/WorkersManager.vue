@@ -187,4 +187,13 @@ function formatTime(iso) {
   font-family: 'Courier New', Consolas, monospace;
   white-space: pre-wrap;
 }
+
+@media (max-width: 768px) {
+  :deep(.el-dialog) {
+    width: 92% !important;
+  }
+  :deep(.el-table) {
+    font-size: 12px;
+  }
+}
 </style>

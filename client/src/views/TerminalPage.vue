@@ -12,4 +12,10 @@ import Terminal from '../components/Terminal.vue'
 .terminal-page {
   max-width: 1200px;
 }
+
+@media (max-width: 768px) {
+  .terminal-page {
+    max-width: 100%;
+  }
+}
 </style>

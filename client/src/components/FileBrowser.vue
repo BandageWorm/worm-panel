@@ -21,6 +21,7 @@
     </div>
 
     <!-- File Table -->
+    <div class="fb-table-wrapper">
     <el-table :data="files" stripe v-loading="loading" size="small" highlight-current-row
       @row-dblclick="handleRowDblclick" style="width:100%">
       <el-table-column label="名称" min-width="300">
@@ -48,13 +49,16 @@
           <code style="font-size:12px">{{ row.mode }}</code>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="操作" width="100" class-name="actions-col">
         <template #default="{ row }">
-          <el-button v-if="row.type === 'file'" text size="small" @click="handleDownload(row)">下载</el-button>
-          <el-button text size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+          <div class="actions-wrap">
+            <el-button v-if="row.type === 'file'" text size="small" @click="handleDownload(row)">下载</el-button>
+            <el-button text size="small" type="danger" @click="handleDelete(row)">删除</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-empty v-if="!loading && files.length === 0" description="空目录" :image-size="60" />
 
@@ -264,6 +268,16 @@ onMounted(() => {
   color: #409eff;
   font-size: 18px;
 }
+/* Mobile responsive table wrapper */
+.fb-table-wrapper {
+  overflow-x: auto;
+}
+
+.actions-wrap {
+  display: flex;
+  gap: 2px;
+}
+
 .upload-icon {
   font-size: 48px;
   color: #c0c4cc;
@@ -276,5 +290,14 @@ onMounted(() => {
 .upload-text em {
   color: #409eff;
   font-style: normal;
+}
+
+@media (max-width: 768px) {
+  :deep(.el-dialog) {
+    width: 92% !important;
+  }
+  :deep(.el-table) {
+    font-size: 12px;
+  }
 }
 </style>

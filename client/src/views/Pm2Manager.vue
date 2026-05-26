@@ -221,4 +221,20 @@ function formatUptime(seconds) {
   font-size: 13px;
   line-height: 1.5;
 }
+
+@media (max-width: 768px) {
+  .logs-toolbar {
+    flex-wrap: wrap;
+  }
+  .logs-toolbar .el-input {
+    width: 100% !important;
+  }
+  :deep(.el-table) {
+    font-size: 12px;
+  }
+  .log-output {
+    font-size: 12px;
+    padding: 12px;
+  }
+}
 </style>

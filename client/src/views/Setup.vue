@@ -125,4 +125,17 @@ async function handleSetup() {
   text-align: center;
   margin-top: 12px;
 }
+
+@media (max-width: 768px) {
+  .setup-container {
+    padding: 20px;
+  }
+  .setup-card {
+    width: 100%;
+    padding: 32px 24px;
+  }
+  .setup-header h1 {
+    font-size: 24px;
+  }
+}
 </style>

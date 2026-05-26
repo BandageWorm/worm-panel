@@ -196,4 +196,13 @@ function isExpiringSoon(dateStr) {
   color: #909399;
   margin-top: 4px;
 }
+
+@media (max-width: 768px) {
+  :deep(.el-dialog) {
+    width: 92% !important;
+  }
+  :deep(.el-table) {
+    font-size: 12px;
+  }
+}
 </style>

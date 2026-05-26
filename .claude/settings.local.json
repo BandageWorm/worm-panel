@@ -3,11 +3,7 @@
     "allow": [
       "Bash(npx openspec *)",
       "Bash(ssh root@38.47.114.109 *)",
-      "Bash(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no root@38.47.114.109 \"echo connected && hostname\")",
-      "Bash(scp -o StrictHostKeyChecking=no /tmp/worm-panel-deploy.tar.gz root@38.47.114.109:/root/worm-panel-src.tar.gz)",
-      "Bash(ssh -o StrictHostKeyChecking=no root@38.47.114.109 \"cd /root && rm -rf worm-panel-src && mkdir -p worm-panel-src && tar xzf worm-panel-src.tar.gz -C worm-panel-src && cd worm-panel-src && bash scripts/deploy.sh\")",
       "Bash(ssh -o StrictHostKeyChecking=no root@38.47.114.109 ' *)",
-      "Bash(ssh -o StrictHostKeyChecking=no root@38.47.114.109 \"cd /root/worm-panel && git remote -v 2>&1 && echo '---' && pwd\")",
       "Bash(bash scripts/sync-and-deploy.sh)"
     ],
     "mode": "yolo"

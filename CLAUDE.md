@@ -43,72 +43,29 @@
 ## 本地开发与测试
 
 - 开发环境: Windows，通过 WSL2 Ubuntu 验证测试
-- 测试方式: WSL2 中启动 `node app.js` → Windows 浏览器访问 `http://wsl.localhost:4567`
+- 测试方式: WSL2 中启动 `node app.js` → Windows 浏览器访问 `http://wsl.localhost:4567`，不得在 Windows 原生环境运行
 - 前端修改后需 `cd client && npm run build` 重新构建
-- acme.sh 和 3X-UI 功能无法在 WSL2 中完整测试，需真实服务器
-- **测试永远只在 WSL2 里进行**，不得在 Windows 原生环境运行
-- **部署永远只在 Ubuntu 服务器**，通过 `scripts/redeploy.sh` 部署到 `/opt/worm-panel`
-- **命令行工具永远在 WSL2 里使用**，包括 curl、git、node、nvm 等
 
 ## 目录结构
 
 ```
 /opt/worm-panel/
-├── app.js                        # 入口文件
+├── app.js                    # 入口
 ├── package.json
-├── scripts/
-│   └── install.sh                # 安装脚本
-├── worm-panel.service            # systemd unit
+├── scripts/                  # 部署/安装脚本
+├── worm-panel.service        # systemd unit
 ├── src/
-│   ├── index.js                  # Express 应用初始化
-│   ├── routes/                   # API 路由
-│   │   ├── auth.js               # 登录
-│   │   ├── setup.js              # 首次设置
-│   │   ├── dashboard.js          # 仪表盘
-│   │   ├── nginx.js              # Nginx 站点管理
-│   │   ├── ssl.js                # SSL 证书
-│   │   ├── notes.js              # 记事本
-│   │   ├── pm2.js                # PM2 进程
-│   │   ├── workers.js            # Workers 部署
-│   │   └── xui.js                # 3X-UI
-│   ├── services/                 # 业务逻辑
-│   │   ├── config.js             # 配置读写
-│   │   ├── setup.js              # 初始化 Token
-│   │   ├── monitor.js            # 系统监控
-│   │   ├── nginx.js              # Nginx 操作（自动 sudo 回退）
-│   │   ├── acme.js               # acme.sh 封装
-│   │   ├── notes.js              # 笔记文件操作
-│   │   ├── pm2.js                # PM2 API 封装
-│   │   ├── workers.js            # Git + wrangler
-│   │   └── xui.js                # 3X-UI 检测与反代
-│   ├── middleware/
-│   │   └── auth.js               # JWT 验证
-│   └── utils/
-│       └── crypto.js             # bcrypt + JWT 工具
-├── client/                        # Vue 3 前端
-│   ├── package.json / vite.config.js / index.html
-│   └── src/
-│       ├── main.js / App.vue
-│       ├── router/index.js       # 路由（懒加载）
-│       ├── api/index.js          # HTTP 客户端
-│       ├── layouts/MainLayout.vue
-│       └── views/
-│           ├── Login.vue / Setup.vue
-│           ├── Dashboard.vue
-│           ├── NginxManager.vue
-│           ├── SslManager.vue
-│           ├── NotesManager.vue
-│           ├── Pm2Manager.vue
-│           ├── WorkersManager.vue
-│           ├── XuiManager.vue
-│           └── Placeholder.vue
-├── public/                        # 前端构建产物
-└── data/
-    ├── config.json                # 面板配置
-    ├── notes/                     # 笔记存储
-    ├── backups/nginx/             # Nginx 配置备份
-    ├── logs/                      # 应用日志
-    └── workers/                   # 克隆的 Worker 项目
+│   ├── index.js              # Express 应用初始化
+│   ├── routes/               # API 路由（按模块划分）
+│   ├── services/             # 业务逻辑层
+│   ├── middleware/auth.js    # JWT 验证
+│   └── utils/crypto.js      # bcrypt + JWT 工具
+├── client/src/               # Vue 3 前端源码
+│   ├── router/ / api/ / layouts/
+│   └── views/                # 页面组件（模块划分同 routes）
+├── public/                   # 前端构建产物
+└── data/                     # 运行时数据
+    ├── config.json / notes/ / backups/nginx/ / logs/ / workers/
 ```
 
 ## 开发约定

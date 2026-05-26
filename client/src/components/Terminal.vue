@@ -198,4 +198,10 @@ onUnmounted(() => {
   position: relative;
   overflow: hidden;
 }
+
+@media (max-width: 768px) {
+  .terminal-body {
+    height: 400px;
+  }
+}
 </style>

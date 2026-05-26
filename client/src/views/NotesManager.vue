@@ -2,7 +2,9 @@
   <div class="notes-manager">
     <div class="notes-sidebar">
       <div class="sidebar-header">
-        <el-button size="small" type="primary" style="width:100%" @click="handleNew">新建笔记</el-button>
+        <el-button size="small" type="primary" @click="handleNew">新建笔记</el-button>
+        <el-button size="small" @click="triggerImport">导入</el-button>
+        <input ref="importInput" type="file" accept=".md" style="display:none" @change="handleImport" />
       </div>
       <div class="notes-list" v-loading="loading">
         <div
@@ -27,6 +29,7 @@
             {{ previewMode ? '编辑' : '预览' }}
           </el-button>
           <el-button size="small" type="primary" :loading="saving" @click="handleSave">保存</el-button>
+          <el-button size="small" @click="handleExport">导出</el-button>
           <el-button size="small" type="danger" @click="handleDelete">删除</el-button>
         </div>
       </div>
@@ -75,9 +78,10 @@ const notes = ref([])
 const currentNote = ref('')
 const editorContent = ref('')
 const saving = ref(false)
-const previewMode = ref(false)
+const previewMode = ref(true)
 const showNewDialog = ref(false)
 const newNoteName = ref('')
+const importInput = ref(null)
 
 const renderedContent = computed(() => md.render(editorContent.value || ''))
 
@@ -93,7 +97,7 @@ async function fetchNotes() {
 
 async function openNote(note) {
   currentNote.value = note.name
-  previewMode.value = false
+  previewMode.value = true
   try {
     const res = await get(`/notes/${note.name}`)
     editorContent.value = res.content
@@ -150,6 +154,47 @@ function formatTime(iso) {
   const pad = n => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
+
+function handleExport() {
+  if (!currentNote.value) return
+  const blob = new Blob([editorContent.value], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = currentNote.value
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function triggerImport() {
+  importInput.value.value = ''
+  importInput.value.click()
+}
+
+async function handleImport(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  const name = file.name.endsWith('.md') ? file.name : file.name + '.md'
+  const content = await file.text()
+
+  // 如果同名笔记已存在，确认后覆盖
+  const exists = notes.value.find(n => n.name === name)
+  if (exists) {
+    try {
+      await ElMessageBox.confirm(`笔记「${name.replace(/\.md$/, '')}」已存在，是否覆盖？`, '确认导入', { type: 'warning' })
+    } catch {
+      return
+    }
+    await put(`/notes/${name}`, { content })
+    ElMessage.success('导入成功')
+  } else {
+    await post('/notes', { name, content })
+    ElMessage.success('导入成功')
+  }
+
+  await fetchNotes()
+  openNote({ name })
+}
 </script>
 
 <style scoped>
@@ -171,6 +216,11 @@ function formatTime(iso) {
 .sidebar-header {
   padding: 12px;
   border-bottom: 1px solid #e4e7ed;
+  display: flex;
+  gap: 8px;
+}
+.sidebar-header .el-button {
+  flex: 1;
 }
 .notes-list {
   flex: 1;
@@ -231,6 +281,11 @@ function formatTime(iso) {
 .editor-body {
   flex: 1;
   overflow: hidden;
+}
+.preview-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
 }
 .note-textarea {
   height: 100%;
@@ -308,5 +363,35 @@ function formatTime(iso) {
 }
 .markdown-preview th {
   background: #f5f7fa;
+}
+
+@media (max-width: 768px) {
+  .notes-manager {
+    flex-direction: column;
+    height: calc(100vh - 74px);
+  }
+  .notes-sidebar {
+    width: 100%;
+    flex: none;
+    max-height: 35vh;
+  }
+  .notes-editor {
+    flex: 1;
+    min-height: 0;
+  }
+  .editor-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .toolbar-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .preview-body {
+    padding: 12px 16px;
+  }
+  .sidebar-header {
+    padding: 10px;
+  }
 }
 </style>

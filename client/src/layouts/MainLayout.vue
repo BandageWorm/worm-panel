@@ -1,7 +1,10 @@
 <template>
   <div class="main-layout">
+    <!-- Mobile menu backdrop -->
+    <div class="mobile-backdrop" v-if="menuOpen" @click="menuOpen = false"></div>
+
     <!-- Sidebar -->
-    <div class="sidebar">
+    <div class="sidebar" :class="{ 'sidebar-open': menuOpen }">
       <div class="logo">
         <span class="logo-icon">◇</span>
         <span class="logo-text">Worm Panel</span>
@@ -12,6 +15,7 @@
         text-color="#a0a0b8"
         active-text-color="#fff"
         router
+        @select="menuOpen = false"
       >
         <el-menu-item index="/dashboard">
           <el-icon><Monitor /></el-icon>
@@ -61,22 +65,25 @@
       <!-- TopBar -->
       <header class="topbar">
         <div class="topbar-left">
+          <el-button class="menu-btn" text @click="menuOpen = !menuOpen">
+            <el-icon size="20"><Fold v-if="menuOpen" /><Expand v-else /></el-icon>
+          </el-button>
           <span class="topbar-title">{{ currentTitle }}</span>
         </div>
         <div class="topbar-right">
-          <span class="topbar-item" v-if="serverInfo">
+          <span class="topbar-item hide-mobile" v-if="serverInfo">
             <el-icon><Cpu /></el-icon>
             CPU {{ serverInfo.cpu?.usage ?? '--' }}%
           </span>
-          <span class="topbar-item" v-if="serverInfo">
+          <span class="topbar-item hide-mobile" v-if="serverInfo">
             <el-icon><Coin /></el-icon>
             内存 {{ formatPercent(serverInfo.memory?.percent) }}
           </span>
-          <span class="topbar-item" v-if="serverInfo">
+          <span class="topbar-item hide-mobile" v-if="serverInfo">
             <el-icon><DataBoard /></el-icon>
             磁盘 {{ formatPercent(serverInfo.disk?.percent) }}
           </span>
-          <span class="topbar-item">{{ now }}</span>
+          <span class="topbar-item hide-mobile">{{ now }}</span>
           <el-button text size="small" @click="logout">退出</el-button>
         </div>
       </header>
@@ -92,12 +99,14 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Expand, Fold } from '@element-plus/icons-vue'
 import { get } from '../api'
 
 const route = useRoute()
 const router = useRouter()
 const now = ref('')
 const serverInfo = ref(null)
+const menuOpen = ref(false)
 let timer = null
 let infoTimer = null
 
@@ -182,6 +191,14 @@ onUnmounted(() => {
   padding: 0 20px;
   flex-shrink: 0;
 }
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.menu-btn {
+  display: none;
+}
 .topbar-title {
   font-size: 16px;
   font-weight: 600;
@@ -203,5 +220,43 @@ onUnmounted(() => {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
+}
+.mobile-backdrop {
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .menu-btn {
+    display: inline-flex;
+  }
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 1001;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+  .sidebar-open {
+    transform: translateX(0);
+  }
+  .mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1000;
+  }
+  .hide-mobile {
+    display: none !important;
+  }
+  .content {
+    padding: 12px;
+  }
+  .topbar {
+    padding: 0 12px;
+  }
 }
 </style>

@@ -2,7 +2,7 @@
   <div class="xui-manager">
     <!-- Status Cards -->
     <el-row :gutter="16">
-      <el-col :span="6">
+      <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="never">
           <div class="stat-item">
             <div class="stat-label">安装状态</div>
@@ -14,7 +14,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="never">
           <div class="stat-item">
             <div class="stat-label">运行状态</div>
@@ -26,7 +26,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="never">
           <div class="stat-item">
             <div class="stat-label">管理端口</div>
@@ -34,7 +34,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="never">
           <div class="stat-item">
             <div class="stat-label">安装路径</div>
@@ -188,7 +188,7 @@ async function handleRemoveProxy() {
   margin-bottom: 8px;
 }
 .stat-value {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   color: #303133;
 }
@@ -245,5 +245,17 @@ async function handleRemoveProxy() {
 }
 .proxy-link:hover {
   text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .proxy-form {
+    flex-wrap: wrap;
+  }
+  .proxy-form .el-input {
+    width: 100% !important;
+  }
+  .access-info {
+    flex-wrap: wrap;
+  }
 }
 </style>

@@ -295,4 +295,20 @@ function formatBytes(bytes) {
 .editor-tip {
   margin-bottom: 12px;
 }
+
+@media (max-width: 768px) {
+  .status-bar {
+    flex-wrap: wrap;
+  }
+  .status-msg {
+    width: 100%;
+    order: 1;
+  }
+  :deep(.el-dialog) {
+    width: 92% !important;
+  }
+  :deep(.el-table) {
+    font-size: 12px;
+  }
+}
 </style>

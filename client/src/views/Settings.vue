@@ -244,4 +244,27 @@ async function confirmRestart() {
   padding-top: 8px;
   margin-bottom: 16px;
 }
+
+@media (max-width: 768px) {
+  .settings-page {
+    max-width: 100%;
+  }
+  .settings-form {
+    max-width: 100%;
+  }
+  .settings-form .el-input,
+  .settings-form .el-input-number,
+  .settings-form :deep(.el-input) {
+    width: 100% !important;
+  }
+  .settings-form :deep(.el-input-number) {
+    width: 100% !important;
+  }
+  .actions-bar {
+    flex-direction: column;
+  }
+  .actions-bar .el-button {
+    width: 100%;
+  }
+}
 </style>
