@@ -44,7 +44,14 @@ function createApp() {
   app.use('/api/settings', authMiddleware, require('./routes/settings'));
   app.use('/api/files', authMiddleware, require('./routes/files'));
 
-  // SPA fallback - serve index.html for all non-API routes
+  app.use('/api/sync', authMiddleware, require('./routes/sync'));
+
+  // Drive — 备份盘
+  const driveRoute = require('./routes/drive');
+  const sync = require('./services/sync');
+  driveRoute.setSyncDrive(sync.syncDrive, sync.isDriveSyncing);
+  app.use('/api/drive', authMiddleware, driveRoute.router);
+
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api')) {
       res.sendFile(path.join(publicDir, 'index.html'));

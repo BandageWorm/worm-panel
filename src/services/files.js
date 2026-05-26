@@ -98,4 +98,40 @@ function mkdir(dirPath) {
   return { success: true };
 }
 
-module.exports = { listDir, getFileInfo, deleteItem, mkdir };
+function readFile(filePath) {
+  const resolved = safeResolve(filePath);
+
+  if (!fs.existsSync(resolved)) {
+    throw new Error('文件不存在');
+  }
+
+  const stat = fs.statSync(resolved);
+  if (stat.isDirectory()) {
+    throw new Error('无法读取目录');
+  }
+
+  if (stat.size > 1024 * 1024) {
+    throw new Error('文件过大无法编辑（超过 1MB）');
+  }
+
+  const content = fs.readFileSync(resolved, 'utf-8');
+  return { content };
+}
+
+function writeFile(filePath, content) {
+  const resolved = safeResolve(filePath);
+  const parentDir = path.dirname(resolved);
+
+  if (!fs.existsSync(parentDir)) {
+    throw new Error('父目录不存在');
+  }
+
+  if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+    throw new Error('无法写入目录');
+  }
+
+  fs.writeFileSync(resolved, content, 'utf-8');
+  return { success: true };
+}
+
+module.exports = { listDir, getFileInfo, deleteItem, mkdir, readFile, writeFile };

@@ -49,9 +49,10 @@
           <code style="font-size:12px">{{ row.mode }}</code>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="100" class-name="actions-col">
+      <el-table-column label="操作" width="140" class-name="actions-col">
         <template #default="{ row }">
           <div class="actions-wrap">
+            <el-button v-if="row.type === 'file' && isEditableFile(row.name)" text size="small" @click="handleEdit(row)">编辑</el-button>
             <el-button v-if="row.type === 'file'" text size="small" @click="handleDownload(row)">下载</el-button>
             <el-button text size="small" type="danger" @click="handleDelete(row)">删除</el-button>
           </div>
@@ -90,14 +91,100 @@
         <el-button type="primary" @click="handleMkdir" :loading="mkdirLoading">创建</el-button>
       </template>
     </el-dialog>
+
+    <!-- Editor Dialog -->
+    <el-dialog v-model="showEditor" :title="'编辑文件: ' + editorPath" width="90%" top="2vh"
+      :close-on-click-modal="false" @close="handleEditorClose">
+      <div v-if="editorLoading" style="text-align:center;padding:40px">
+        <el-icon class="is-loading" :size="24"><Refresh /></el-icon>
+        <p style="margin-top:12px;color:#909399">正在加载文件...</p>
+      </div>
+      <div v-else-if="editorError" style="text-align:center;padding:40px">
+        <el-result icon="error" title="读取失败" :sub-title="editorError" />
+      </div>
+      <div v-else>
+        <Codemirror
+          v-model="editorContent"
+          :extensions="editorExtensions"
+          :style="{ height: '65vh' }"
+          :autofocus="true"
+          :disabled="false"
+          :indent-with-tab="true"
+          :tab-size="2"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="showEditor = false">取消</el-button>
+        <el-button type="primary" @click="handleEditorSave" :loading="editorSaving" :disabled="!!editorError">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, shallowRef, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Upload, FolderAdd, Refresh, Folder, Document, UploadFilled } from '@element-plus/icons-vue'
-import { get, del, post } from '../api'
+import { Upload, FolderAdd, Refresh, Folder, Document, UploadFilled, EditPen } from '@element-plus/icons-vue'
+import { get, del, post, put } from '../api'
+import { Codemirror } from 'vue-codemirror'
+import { javascript } from '@codemirror/lang-javascript'
+import { html } from '@codemirror/lang-html'
+import { css } from '@codemirror/lang-css'
+import { markdown } from '@codemirror/lang-markdown'
+import { yaml } from '@codemirror/lang-yaml'
+import { xml } from '@codemirror/lang-xml'
+import { sql } from '@codemirror/lang-sql'
+import { oneDark } from '@codemirror/theme-one-dark'
+
+const EDITABLE_EXTENSIONS = {
+  '.txt': null,
+  '.md': markdown,
+  '.markdown': markdown,
+  '.json': javascript,
+  '.js': javascript,
+  '.jsx': javascript,
+  '.ts': javascript,
+  '.tsx': javascript,
+  '.cjs': javascript,
+  '.mjs': javascript,
+  '.vue': javascript,
+  '.html': html,
+  '.htm': html,
+  '.css': css,
+  '.scss': css,
+  '.less': css,
+  '.yml': yaml,
+  '.yaml': yaml,
+  '.xml': xml,
+  '.svg': xml,
+  '.sql': sql,
+  '.conf': null,
+  '.cfg': null,
+  '.ini': null,
+  '.sh': null,
+  '.bash': null,
+  '.zsh': null,
+  '.env': null,
+  '.log': null,
+  '.gitignore': null,
+  '.dockerignore': null,
+  '.editorconfig': null,
+  '.npmrc': null
+}
+
+function isEditableFile(filename) {
+  const dotIdx = filename.lastIndexOf('.')
+  if (dotIdx === -1) return true // no extension, treat as text
+  const ext = filename.slice(dotIdx).toLowerCase()
+  return ext in EDITABLE_EXTENSIONS
+}
+
+function getLanguageExt(filename) {
+  const dotIdx = filename.lastIndexOf('.')
+  if (dotIdx === -1) return null
+  const ext = filename.slice(dotIdx).toLowerCase()
+  return EDITABLE_EXTENSIONS[ext] || null
+}
 
 const loading = ref(false)
 const files = ref([])
@@ -109,6 +196,14 @@ const showUpload = ref(false)
 const showMkdir = ref(false)
 const newDirName = ref('')
 const mkdirLoading = ref(false)
+// Editor
+const showEditor = ref(false)
+const editorLoading = ref(false)
+const editorSaving = ref(false)
+const editorPath = ref('')
+const editorContent = ref('')
+const editorError = ref('')
+const editorExtensions = shallowRef([])
 
 const breadcrumbs = computed(() => {
   const parts = currentPath.value.split('/').filter(Boolean)
@@ -234,6 +329,47 @@ function handleUploadError(err) {
   ElMessage.error('上传失败: ' + (err.message || '未知错误'))
 }
 
+async function handleEdit(row) {
+  const filePath = currentPath.value === '/' ? `/${row.name}` : `${currentPath.value}/${row.name}`
+  editorPath.value = filePath
+  editorContent.value = ''
+  editorError.value = ''
+  editorLoading.value = true
+  showEditor.value = true
+
+  try {
+    // Set language extensions
+    const lang = getLanguageExt(row.name)
+    editorExtensions.value = lang ? [lang(), oneDark] : [oneDark]
+
+    const result = await get(`/files/read?path=${encodeURIComponent(filePath)}`)
+    editorContent.value = result.content
+  } catch (e) {
+    editorError.value = e.message
+  } finally {
+    editorLoading.value = false
+  }
+}
+
+async function handleEditorSave() {
+  editorSaving.value = true
+  try {
+    await put('/files/write', { path: editorPath.value, content: editorContent.value })
+    ElMessage.success('已保存')
+    showEditor.value = false
+    await fetchFiles()
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+  editorSaving.value = false
+}
+
+function handleEditorClose() {
+  showEditor.value = false
+  editorContent.value = ''
+  editorError.value = ''
+}
+
 onMounted(() => {
   fetchFiles()
 })
@@ -275,7 +411,10 @@ onMounted(() => {
 
 .actions-wrap {
   display: flex;
-  gap: 2px;
+  gap: 0;
+}
+.actions-wrap .el-button {
+  margin-left: 0;
 }
 
 .upload-icon {

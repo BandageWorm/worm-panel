@@ -95,4 +95,38 @@ router.post('/mkdir', (req, res) => {
   }
 });
 
+// Read file content
+router.get('/read', (req, res) => {
+  try {
+    const filePath = req.query.path;
+    if (!filePath) {
+      return res.status(400).json({ error: '路径不能为空' });
+    }
+    const result = files.readFile(filePath);
+    res.json(result);
+  } catch (e) {
+    const status = e.message === '文件不存在' ? 404
+      : e.message === '文件过大无法编辑（超过 1MB）' ? 413
+      : 400;
+    res.status(status).json({ error: e.message });
+  }
+});
+
+// Write file content
+router.put('/write', (req, res) => {
+  try {
+    const { path: filePath, content } = req.body;
+    if (!filePath) {
+      return res.status(400).json({ error: '路径不能为空' });
+    }
+    if (content === undefined || content === null) {
+      return res.status(400).json({ error: '内容不能为空' });
+    }
+    const result = files.writeFile(filePath, content);
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 module.exports = router;

@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const notes = require('../services/notes');
+const sync = require('../services/sync');
 const logger = require('../utils/logger');
 
 const router = Router();
@@ -28,6 +29,7 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: '笔记名称不能为空' });
     }
     const result = notes.create({ name, content });
+    sync.triggerBackup();
     res.json(result);
   } catch (e) {
     logger.error('Notes', `创建笔记 ${req.body?.name} 失败`, e);
@@ -42,6 +44,7 @@ router.put('/:name', (req, res) => {
       return res.status(400).json({ error: '内容不能为空' });
     }
     notes.update(req.params.name, content);
+    sync.triggerBackup();
     res.json({ success: true });
   } catch (e) {
     logger.error('Notes', `更新笔记 ${req.params.name} 失败`, e);

@@ -53,6 +53,10 @@
           <el-icon><Grid /></el-icon>
           <span>3X-UI</span>
         </el-menu-item>
+        <el-menu-item index="/sync">
+          <el-icon><UploadFilled /></el-icon>
+          <span>云备份</span>
+        </el-menu-item>
         <el-menu-item index="/settings">
           <el-icon><Setting /></el-icon>
           <span>设置</span>

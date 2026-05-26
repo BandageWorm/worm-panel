@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "Bash(openspec *)",
       "Bash(npx openspec *)",
       "Bash(ssh root@38.47.114.109 *)",
       "Bash(ssh -o StrictHostKeyChecking=no root@38.47.114.109 ' *)",

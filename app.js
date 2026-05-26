@@ -5,6 +5,7 @@ const { createApp } = require('./src/index');
 const config = require('./src/services/config');
 const nginx = require('./src/services/nginx');
 const cert = require('./src/services/cert');
+const sync = require('./src/services/sync');
 const { createTerminal } = require('./src/services/terminal');
 const logger = require('./src/utils/logger');
 
@@ -50,6 +51,9 @@ function startServer(server) {
     const protocol = server instanceof https.Server ? 'https' : 'http';
     logger.info('App', `Worm Panel running on ${protocol}://${host}:${port}, mode: ${cfg.mode}`);
     showSetupInfo(host, port, protocol);
+
+    // Start 12-hour periodic sync
+    startPeriodicSync();
   });
 }
 
@@ -68,6 +72,20 @@ if (useHttps) {
 } else {
   const server = http.createServer(app);
   startServer(server);
+}
+
+const SYNC_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
+let syncTimer = null;
+
+function startPeriodicSync() {
+  if (syncTimer) clearInterval(syncTimer);
+  const cfg = config.load();
+  if (cfg.sync?.refreshToken) {
+    logger.info('Sync', '12小时定时同步已启动');
+    syncTimer = setInterval(() => {
+      sync.triggerBackup();
+    }, SYNC_INTERVAL_MS);
+  }
 }
 
 function showSetupInfo(host, port, protocol) {

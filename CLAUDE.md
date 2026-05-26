@@ -76,3 +76,4 @@
 - 修改 Nginx 配置前自动备份，保留最近 30 份
 - 除 /api/auth/login 和 /api/setup/* 外，所有 API 需 JWT Bearer token
 - 归档 OpenSpec 变更时：先同步 delta specs 到主 specs，再归档
+- UI需要支持响应式布局，手机端方便访问

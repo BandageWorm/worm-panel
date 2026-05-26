@@ -22,11 +22,21 @@ cd "$SOURCE_DIR"
 
 # ── Collect changed files ──
 
-MODIFIED=$(git diff HEAD --name-only --diff-filter=M 2>/dev/null || true)
+# Collect modified files with actual content changes
+# -b ignores whitespace (handles CRLF diffs between Windows/WSL)
+# sed removes diff header lines, then check for +/- content lines
+MODIFIED=""
+while IFS= read -r f; do
+  if git diff HEAD -b -- "$f" 2>/dev/null | sed '1,4d' | grep -q '^[+-]'; then
+    MODIFIED="$MODIFIED $f"
+  fi
+done < <(git diff HEAD --name-only --diff-filter=M 2>/dev/null)
+# Trim leading space
+MODIFIED="${MODIFIED# }"
 UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
 DELETED=$(git diff HEAD --name-only --diff-filter=D 2>/dev/null || true)
 
-ALL_FILES=$(echo -e "$MODIFIED\n$UNTRACKED" | grep -v '^$' | grep -v 'node_modules' | grep -v '\.git' | grep -v 'public/' | grep -v 'data/' | sort -u || true)
+ALL_FILES=$(echo -e "$MODIFIED\n$UNTRACKED" | grep -v '^$' | grep -v 'node_modules' | grep -v '\.git' | grep -v 'public/' | grep -v 'data/' | grep -v '^openspec/' | sort -u || true)
 
 if [ -z "$ALL_FILES" ]; then
   log_info "No files to sync"

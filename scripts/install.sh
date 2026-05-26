@@ -113,6 +113,71 @@ else
   log_ok "wrangler is already installed"
 fi
 
+# ── rclone (云备份) ──
+
+if ! command -v rclone &> /dev/null; then
+  log_info "Installing rclone..."
+  curl -fsSL https://rclone.org/install.sh | bash
+  log_ok "rclone installed"
+else
+  log_ok "rclone $(rclone --version | head -1) is already installed"
+fi
+
+# ── aliyundrive-webdav (云备份代理) ──
+
+if ! command -v pip3 &> /dev/null && ! command -v pip &> /dev/null; then
+  log_info "Installing python3-pip..."
+  apt-get install -y -qq python3-pip 2>/dev/null || log_warn "Failed to install pip, aliyundrive-webdav may not work"
+fi
+
+ALIYUNDRIVE_DAV_INSTALLED=false
+if ! command -v aliyundrive-webdav &> /dev/null; then
+  log_info "Installing aliyundrive-webdav..."
+  PIP_CMD=$(command -v pip3 2>/dev/null || command -v pip 2>/dev/null || true)
+  if [ -n "$PIP_CMD" ]; then
+    $PIP_CMD install aliyundrive-webdav -q 2>/dev/null && { ALIYUNDRIVE_DAV_INSTALLED=true; log_ok "aliyundrive-webdav installed"; } || log_warn "aliyundrive-webdav 安装失败，可稍后手动安装: pip install aliyundrive-webdav"
+  fi
+else
+  ALIYUNDRIVE_DAV_INSTALLED=true
+  log_ok "aliyundrive-webdav is already installed"
+fi
+
+# ── Create systemd service for aliyundrive-webdav ──
+
+if [ "$ALIYUNDRIVE_DAV_INSTALLED" = true ]; then
+  log_info "Creating aliyundrive-webdav systemd service..."
+  cat > /etc/systemd/system/aliyundrive-webdav.service << 'SERVICEEOF'
+[Unit]
+Description=aliyundrive-webdav
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/aliyundrive-webdav.conf
+ExecStart=aliyundrive-webdav
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SERVICEEOF
+
+  # 创建默认配置文件
+  if [ ! -f /etc/aliyundrive-webdav.conf ]; then
+    cat > /etc/aliyundrive-webdav.conf << 'CONFEOF'
+# aliyundrive-webdav 配置
+# 先运行 aliyundrive-webdav qr login 扫码登录后，
+# 取消下面注释并修改密码，然后启动服务:
+# systemctl start aliyundrive-webdav && systemctl enable aliyundrive-webdav
+# PORT=8080
+# WEBDAV_AUTH_USER=admin
+# WEBDAV_AUTH_PASSWORD=你的密码
+CONFEOF
+    log_ok "aliyundrive-webdav config created at /etc/aliyundrive-webdav.conf"
+  fi
+  systemctl daemon-reload 2>/dev/null || true
+fi
+
 # ── Create Directories ──
 
 log_info "Setting up directory structure at $INSTALL_DIR"
@@ -218,3 +283,11 @@ echo ""
 echo -e "  ${CYAN}Config:${NC}"
 echo -e "    $INSTALL_DIR/data/config.json"
 echo ""
+
+if command -v aliyundrive-webdav &> /dev/null; then
+  echo -e "  ${CYAN}云备份 (aliyundrive-webdav):${NC}"
+  echo -e "    aliyundrive-webdav qr login        # 扫码登录阿里云盘"
+  echo -e "    systemctl start aliyundrive-webdav  # 启动 WebDAV 服务"
+  echo -e "    # 先编辑: /etc/aliyundrive-webdav.conf 设置端口和密码"
+  echo ""
+fi
