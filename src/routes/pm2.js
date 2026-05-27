@@ -25,6 +25,16 @@ router.post('/restart/:name', async (req, res) => {
   }
 });
 
+router.post('/start/:name', async (req, res) => {
+  try {
+    await pm2.start(req.params.name);
+    res.json({ success: true });
+  } catch (e) {
+    logger.error('PM2', `启动 ${req.params.name} 失败`, e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/stop/:name', async (req, res) => {
   try {
     await pm2.stop(req.params.name);
@@ -76,6 +86,7 @@ router.get('/processes/:name', async (req, res) => {
       args: proc.pm2_env?.args ? (Array.isArray(proc.pm2_env.args) ? proc.pm2_env.args.join(' ') : String(proc.pm2_env.args)) : '',
       cwd: proc.pm2_env?.pm_cwd || '',
       interpreter: proc.pm2_env?.exec_interpreter || '',
+      port: proc.pm2_env?.env?.PORT || '',
       status: proc.pm2_env?.status || '',
       restarts: proc.pm2_env?.restart_time || 0
     });
@@ -87,9 +98,9 @@ router.get('/processes/:name', async (req, res) => {
 
 router.put('/processes/:name', async (req, res) => {
   try {
-    const { script, args, cwd, interpreter, name: newName } = req.body;
+    const { script, args, cwd, interpreter, port, name: newName } = req.body;
     await pm2.updateProcess(req.params.name, {
-      script, args, cwd, interpreter, name: newName
+      script, args, cwd, interpreter, port, name: newName
     });
     res.json({ success: true });
   } catch (e) {

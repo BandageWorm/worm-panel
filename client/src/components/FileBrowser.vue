@@ -2,11 +2,23 @@
   <div class="file-browser">
     <!-- Toolbar -->
     <div class="fb-toolbar">
-      <el-breadcrumb separator="/">
-        <el-breadcrumb-item v-for="(seg, i) in breadcrumbs" :key="i">
-          <a href="#" @click.prevent="navigateTo(seg.path)">{{ seg.name }}</a>
-        </el-breadcrumb-item>
-      </el-breadcrumb>
+      <div class="fb-breadcrumb-area">
+        <el-breadcrumb v-if="!pathInputMode" separator="/" class="fb-breadcrumb">
+          <el-breadcrumb-item v-for="(seg, i) in breadcrumbs" :key="i">
+            <a href="#" @click.prevent="navigateTo(seg.path)">{{ seg.name }}</a>
+          </el-breadcrumb-item>
+        </el-breadcrumb>
+        <el-input v-else v-model="pathInputValue" size="small" class="fb-path-input"
+          placeholder="输入路径" @keyup.enter="handlePathInputEnter" ref="pathInputRef" />
+        <div class="fb-breadcrumb-actions">
+          <el-button size="small" plain @click="togglePathInput" :title="pathInputMode ? '返回导航' : '编辑路径'">
+            <el-icon><EditPen /></el-icon>
+          </el-button>
+          <el-button size="small" plain @click="copyPath" title="复制路径">
+            <el-icon><CopyDocument /></el-icon>
+          </el-button>
+        </div>
+      </div>
       <div class="fb-actions">
         <el-button size="small" @click="showUpload = true" :disabled="!currentPath">
           <el-icon><Upload /></el-icon> 上传
@@ -22,9 +34,9 @@
 
     <!-- File Table -->
     <div class="fb-table-wrapper">
-    <el-table :data="files" stripe v-loading="loading" size="small" highlight-current-row
-      @row-dblclick="handleRowDblclick" style="width:100%">
-      <el-table-column label="名称" min-width="300">
+    <el-table :data="sortedFiles" stripe v-loading="loading" size="small" highlight-current-row
+      @row-dblclick="handleRowDblclick" @sort-change="handleSortChange" style="width:100%">
+      <el-table-column label="名称" min-width="150" sortable="custom">
         <template #default="{ row }">
           <div class="file-cell">
             <el-icon v-if="row.type === 'dir'" class="dir-icon"><Folder /></el-icon>
@@ -33,13 +45,13 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="size" label="大小" width="120">
+      <el-table-column prop="size" label="大小" width="80" sortable="custom">
         <template #default="{ row }">
           <span v-if="row.type === 'file'">{{ formatSize(row.size) }}</span>
           <span v-else style="color:#909399">--</span>
         </template>
       </el-table-column>
-      <el-table-column label="修改时间" width="180">
+      <el-table-column label="修改时间" width="150" sortable="custom">
         <template #default="{ row }">
           {{ formatTime(row.modifiedAt) }}
         </template>
@@ -128,9 +140,9 @@
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, onMounted } from 'vue'
+import { ref, computed, shallowRef, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Upload, FolderAdd, Refresh, Folder, Document, UploadFilled, EditPen, Download, Delete } from '@element-plus/icons-vue'
+import { Upload, FolderAdd, Refresh, Folder, Document, UploadFilled, EditPen, Download, Delete, CopyDocument } from '@element-plus/icons-vue'
 import { get, del, post, put } from '../api'
 import { Codemirror } from 'vue-codemirror'
 import { javascript } from '@codemirror/lang-javascript'
@@ -222,6 +234,34 @@ const breadcrumbs = computed(() => {
   return crumbs
 })
 
+// Sort state
+const sortProp = ref('')
+const sortOrder = ref('')
+
+const sortedFiles = computed(() => {
+  const dirs = files.value.filter(f => f.type === 'dir')
+  const fileItems = files.value.filter(f => f.type === 'file')
+  if (!sortProp.value || !sortOrder.value) return [...dirs, ...fileItems]
+  const compare = (a, b) => {
+    const getVal = item => {
+      if (sortProp.value === 'name') return (item.name || '').toLowerCase()
+      if (sortProp.value === 'size') return item.size || 0
+      if (sortProp.value === 'modifiedAt') return item.modifiedAt ? new Date(item.modifiedAt).getTime() : 0
+      return item.name
+    }
+    const va = getVal(a)
+    const vb = getVal(b)
+    const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb
+    return sortOrder.value === 'descending' ? -cmp : cmp
+  }
+  return [...dirs.sort(compare), ...fileItems.sort(compare)]
+})
+
+// Path input mode
+const pathInputMode = ref(false)
+const pathInputValue = ref('')
+const pathInputRef = ref(null)
+
 const uploadUrl = computed(() => {
   return `/api/files/upload?path=${encodeURIComponent(currentPath.value)}`
 })
@@ -265,6 +305,8 @@ function navigateTo(path) {
 function handleRowDblclick(row) {
   if (row.type === 'dir') {
     navigateTo(currentPath.value === '/' ? `/${row.name}` : `${currentPath.value}/${row.name}`)
+  } else if (row.type === 'file' && isEditableFile(row.name)) {
+    handleEdit(row)
   }
 }
 
@@ -376,6 +418,44 @@ function handleEditorClose() {
   editorError.value = ''
 }
 
+function handleSortChange({ prop, order }) {
+  sortProp.value = prop || ''
+  sortOrder.value = order || ''
+}
+
+function togglePathInput() {
+  if (pathInputMode.value) {
+    pathInputMode.value = false
+  } else {
+    pathInputValue.value = currentPath.value
+    pathInputMode.value = true
+    nextTick(() => pathInputRef.value?.focus())
+  }
+}
+
+async function handlePathInputEnter() {
+  const path = pathInputValue.value.trim()
+  if (!path) return
+  try {
+    // Verify path exists before navigating
+    await get(`/files?path=${encodeURIComponent(path)}`)
+    currentPath.value = path
+    await fetchFiles()
+    pathInputMode.value = false
+  } catch (e) {
+    ElMessage.error('路径不存在')
+  }
+}
+
+async function copyPath() {
+  try {
+    await navigator.clipboard.writeText(currentPath.value)
+    ElMessage.success('路径已复制')
+  } catch (e) {
+    ElMessage.error('复制失败')
+  }
+}
+
 onMounted(() => {
   fetchFiles()
 })
@@ -439,6 +519,30 @@ onMounted(() => {
   font-style: normal;
 }
 
+.fb-breadcrumb-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.fb-breadcrumb {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fb-path-input {
+  flex: 1;
+  min-width: 0;
+}
+.fb-breadcrumb-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
   .fb-toolbar {
     flex-direction: column;
@@ -450,14 +554,46 @@ onMounted(() => {
   .fb-actions .el-button {
     flex: 1;
   }
+  :deep(.el-table .el-table__cell) {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :deep(.el-table .el-table__cell:nth-child(1)) {
+    min-width: 100px !important;
+    max-width: 140px;
+  }
+  :deep(colgroup col:nth-child(1)) {
+    min-width: 100px !important;
+    width: auto !important;
+  }
+  :deep(.el-table .el-table__cell:nth-child(2)) {
+    width: 60px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(3)) {
+    width: 100px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(4)) {
+    width: 50px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(5)) {
+    width: 80px;
+  }
   .actions-wrap {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
   :deep(.el-dialog) {
     width: 92% !important;
   }
+  :deep(.el-dialog__title) {
+    font-size: 14px;
+  }
   :deep(.el-table) {
     font-size: 12px;
+  }
+  :deep(.cm-editor) {
+    font-size: 10px;
   }
 }
 </style>

@@ -37,7 +37,7 @@
             立即备份
           </el-button>
           <el-button type="success" :loading="restoring" @click="handleRestore" icon="Download">
-            从云端恢复
+            云端恢复
           </el-button>
           <el-button type="danger" @click="handleDisconnect" icon="Link">
             断开连接
@@ -823,11 +823,12 @@ onMounted(() => {
     grid-template-columns: repeat(2, 1fr);
   }
   .status-actions {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
   .status-actions .el-button {
-    width: 100% !important;
+    flex: 1;
+    min-width: 0;
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
@@ -854,6 +855,24 @@ onMounted(() => {
   }
   .drive-breadcrumb {
     text-align: center;
+  }
+  :deep(.el-table .el-table__cell) {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :deep(.el-table .el-table__cell:nth-child(1)) {
+    min-width: 100px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(2)) {
+    width: 70px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(3)) {
+    width: 120px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(4)) {
+    width: 90px;
   }
 }
 </style>

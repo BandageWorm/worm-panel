@@ -1,5 +1,6 @@
 <template>
-  <div class="ssl-manager">
+  <div class="ssl-manager" v-loading="loading" element-loading-text="加载中...">
+    <template v-if="!loading">
     <!-- acme.sh Status -->
     <el-card class="status-card" shadow="never">
       <div class="status-row">
@@ -30,7 +31,9 @@
 
       <el-table :data="certs" stripe v-loading="loading" size="small">
         <el-table-column prop="domain" label="域名" min-width="200" />
-        <el-table-column prop="issuedDate" label="签发日期" width="180" />
+        <el-table-column label="签发日期" width="120">
+          <template #default="{ row }">{{ row.issuedDate || '--' }}</template>
+        </el-table-column>
         <el-table-column label="到期时间" width="180">
           <template #default="{ row }">{{ row.expireDate || '--' }}</template>
         </el-table-column>
@@ -67,6 +70,7 @@
       </template>
     </el-dialog>
 
+  </template>
   </div>
 </template>
 
@@ -80,7 +84,7 @@ const { isMobile } = useMobile()
 
 const acmeInstalled = ref(false)
 const installing = ref(false)
-const loading = ref(false)
+const loading = ref(true)
 const renewingAll = ref(false)
 const certs = ref([])
 
@@ -89,9 +93,9 @@ const showIssueDialog = ref(false)
 const issuing = ref(false)
 const issueForm = ref({ domain: '' })
 
-onMounted(() => {
-  fetchStatus()
-  fetchCerts()
+onMounted(async () => {
+  await Promise.all([fetchStatus(), fetchCerts()])
+  loading.value = false
 })
 
 async function fetchStatus() {
@@ -102,11 +106,9 @@ async function fetchStatus() {
 }
 
 async function fetchCerts() {
-  loading.value = true
   try {
     certs.value = await get('/ssl/certs')
   } catch {}
-  loading.value = false
 }
 
 async function handleInstall() {
@@ -222,6 +224,23 @@ function isExpiringSoon(dateStr) {
   }
   :deep(.el-dialog) {
     width: 92% !important;
+  }
+  :deep(.el-table .el-table__cell:nth-child(1)) {
+    min-width: 0;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :deep(.el-table .el-table__cell:nth-child(2)),
+  :deep(.el-table .el-table__cell:nth-child(3)) {
+    width: 100px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(4)) {
+    width: 70px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(5)) {
+    width: 90px;
   }
   :deep(.el-table) {
     font-size: 12px;

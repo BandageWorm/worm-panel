@@ -1,5 +1,6 @@
 <template>
-  <div class="settings-page">
+  <div class="settings-page" v-loading="loading" element-loading-text="加载中...">
+    <template v-if="!loading">
     <!-- Basic Settings -->
     <el-card shadow="never" class="settings-card">
       <template #header>
@@ -9,7 +10,10 @@
         </div>
       </template>
       <el-form :model="form" label-position="top" class="settings-form">
-        <el-form-item label="面板端口">
+        <el-form-item>
+          <template #label>
+            <span class="label-with-tip">面板端口 <span class="form-tip-inline">（修改后需重启面板生效）</span></span>
+          </template>
           <el-input
             v-model.number="form.port"
             type="number"
@@ -17,25 +21,26 @@
             :max="65535"
             style="width:200px"
           />
-          <div class="form-tip">修改后需重启面板生效</div>
         </el-form-item>
 
-        <el-form-item label="面板模式">
-          <el-radio-group v-model="form.mode" class="vertical-radio-group">
+        <el-form-item>
+          <template #label>
+            <span class="label-with-tip">面板模式 <span class="form-tip-inline">（切换模式后需重启面板生效）</span></span>
+          </template>
+          <el-radio-group v-model="form.mode">
             <el-radio value="standalone">
-              Standalone
+              端口模式
               <el-tooltip content="面板直接监听端口，自签 HTTPS" placement="right">
                 <el-icon class="mode-tip-icon"><QuestionFilled /></el-icon>
               </el-tooltip>
             </el-radio>
             <el-radio value="proxy">
-              Proxy
+              反代模式
               <el-tooltip content="面板监听 127.0.0.1，由 Nginx 反代提供 HTTPS" placement="right">
                 <el-icon class="mode-tip-icon"><QuestionFilled /></el-icon>
               </el-tooltip>
             </el-radio>
           </el-radio-group>
-          <div class="form-tip">切换模式后需重启面板生效</div>
         </el-form-item>
 
         <el-form-item label="绑定域名" v-if="form.mode === 'proxy'">
@@ -95,6 +100,7 @@
         </el-form-item>
       </el-form>
     </el-card>
+  </template>
   </div>
 </template>
 
@@ -104,6 +110,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, put, post } from '../api'
 import { QuestionFilled } from '@element-plus/icons-vue'
 
+const loading = ref(true)
 const saving = ref(false)
 const changingPwd = ref(false)
 const restarting = ref(false)
@@ -128,6 +135,7 @@ onMounted(async () => {
   } catch (e) {
     ElMessage.error('加载设置失败: ' + e.message)
   }
+  loading.value = false
 })
 
 async function handleSave() {
@@ -242,26 +250,18 @@ async function confirmRestart() {
   margin-left: 4px;
   vertical-align: middle;
 }
-
-/* Vertical radio group */
-.vertical-radio-group {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.label-with-tip {
+  font-size: 15px;
+  font-weight: 600;
 }
-.vertical-radio-group :deep(.el-radio) {
-  height: auto;
-  margin-right: 0;
-  align-items: center;
-}
-.vertical-radio-group :deep(.el-radio__label) {
-  white-space: normal;
-  font-size: 14px;
-}
-.vertical-radio-group :deep(.el-radio__description) {
+.form-tip-inline {
   font-size: 12px;
+  font-weight: 400;
   color: #909399;
-  margin-top: 2px;
+  margin-left: 6px;
+}
+.radio-label-text {
+  vertical-align: middle;
 }
 
 .actions-bar {
@@ -283,10 +283,12 @@ async function confirmRestart() {
     width: 100% !important;
   }
   .actions-bar {
-    flex-direction: column;
+    flex-direction: row;
   }
   .actions-bar .el-button {
-    width: 100%;
+    flex: 1;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 }
 </style>

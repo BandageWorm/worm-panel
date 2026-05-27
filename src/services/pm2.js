@@ -97,6 +97,33 @@ async function reload(name) {
   disconnect();
 }
 
+async function start(name) {
+  await connect();
+  const client = bindClient();
+
+  // 检查进程是否已在 PM2 列表中
+  const processes = await client.list();
+  const proc = processes.find(p => p.name === name);
+
+  if (proc) {
+    // 进程存在（可能是 stopped 状态），直接 restart
+    await client.restart(name);
+  } else {
+    // 进程完全不在 PM2 中，尝试从 ecosystem 配置启动
+    const configPath = getConfigPath();
+    if (configPath && fs.existsSync(configPath)) {
+      await client.start({
+        script: configPath,
+        args: ['--only', name]
+      });
+    } else {
+      throw new Error(`进程 ${name} 不存在且未找到 ecosystem 配置`);
+    }
+  }
+
+  disconnect();
+}
+
 async function removeProcess(name) {
   await connect();
   const client = bindClient();
@@ -159,12 +186,19 @@ async function updateProcess(name, updates) {
   try { await client.delete(name); } catch {}
 
   // Build new start options
+  const env = { ...(proc?.pm2_env?.env || {}) };
+  if (updates.port) {
+    env.PORT = String(updates.port);
+  } else if (updates.port === '' || updates.port === null) {
+    delete env.PORT;
+  }
+
   const options = {
     script: updates.script || proc?.pm2_env?.pm_exec_path || name,
     name: updates.name || name,
     cwd: updates.cwd || proc?.pm2_env?.pm_cwd || process.cwd(),
     interpreter: updates.interpreter || proc?.pm2_env?.exec_interpreter || undefined,
-    env: proc?.pm2_env?.env || {},
+    env,
     log_date_format: 'MM-DD HH:mm:ss'
   };
   if (updates.args) {
@@ -200,4 +234,4 @@ function saveConfig(content) {
   return configPath;
 }
 
-module.exports = { list, restart, stop, reload, describe, updateProcess, removeProcess, getLogs, clearLogs, getConfig, saveConfig };
+module.exports = { list, restart, stop, reload, start, describe, updateProcess, removeProcess, getLogs, clearLogs, getConfig, saveConfig };

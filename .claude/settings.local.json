@@ -6,7 +6,8 @@
       "Bash(ssh root@38.47.114.109 *)",
       "Bash(ssh -o StrictHostKeyChecking=no root@38.47.114.109 ' *)",
       "Bash(bash scripts/sync-and-deploy.sh)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(wsl ssh *)"
     ],
     "mode": "yolo"
   }

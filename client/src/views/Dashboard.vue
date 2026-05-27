@@ -1,5 +1,6 @@
 <template>
-  <div class="dashboard">
+  <div class="dashboard" v-loading="loading" element-loading-text="加载中...">
+    <template v-if="!loading">
     <!-- Server Overview -->
     <el-card class="overview-card" shadow="never">
       <template #header>
@@ -96,6 +97,7 @@
       </el-card>
     </div>
 
+  </template>
   </div>
 </template>
 
@@ -104,6 +106,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { get } from '../api'
 
 const info = ref({})
+const loading = ref(true)
 let timer = null
 
 const cpuPercent = computed(() => Math.round(info.value.cpu?.usage ?? 0))
@@ -151,6 +154,7 @@ async function fetchData() {
   } catch {
     // offline
   }
+  loading.value = false
 }
 
 onMounted(() => {

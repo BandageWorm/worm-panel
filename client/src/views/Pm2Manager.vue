@@ -1,5 +1,6 @@
 <template>
-  <div class="pm2-manager">
+  <div class="pm2-manager" v-loading="loading" element-loading-text="加载中...">
+    <template v-if="!loading">
     <el-tabs v-model="activeTab">
       <el-tab-pane label="进程列表" name="processes">
         <el-table :data="processes" stripe v-loading="loading" size="small">
@@ -22,10 +23,10 @@
             <template #default="{ row }">{{ formatUptime(row.uptime) }}</template>
           </el-table-column>
           <el-table-column prop="restarts" label="重启次数" width="80" />
-          <el-table-column label="操作" width="240" :fixed="isMobile ? false : 'right'">
+          <el-table-column label="操作" width="280" :fixed="isMobile ? false : 'right'">
             <template #default="{ row }">
               <div class="actions-wrap">
-              <el-button size="small" plain type="primary" @click="handleRestart(row)">重启</el-button>
+              <el-button size="small" plain :type="row.status === 'online' ? 'primary' : 'success'" @click="handleStart(row)">{{ row.status === 'online' ? '重启' : '启动' }}</el-button>
               <el-button size="small" plain type="primary" @click="handleReload(row)">重载</el-button>
               <el-button size="small" plain type="warning" @click="handleEdit(row)">编辑</el-button>
               <el-button size="small" plain type="danger" @click="handleStop(row)">停止</el-button>
@@ -107,6 +108,9 @@
             <el-form-item label="工作目录">
               <el-input v-model="editForm.cwd" placeholder="/opt/worm-panel/data/workers/my-app" />
             </el-form-item>
+            <el-form-item label="端口">
+              <el-input-number v-model="editForm.port" :min="1" :max="65535" :step="1" placeholder="不填则不设置" controls-position="right" style="width:100%" />
+            </el-form-item>
             <el-form-item label="解释器">
               <el-select v-model="editForm.interpreter" clearable placeholder="自动检测" style="width:100%">
                 <el-option label="node" value="node" />
@@ -149,6 +153,7 @@
         />
       </el-tab-pane>
     </el-tabs>
+  </template>
   </div>
 </template>
 
@@ -160,7 +165,7 @@ import { useMobile } from '../composables/useMobile'
 
 const { isMobile } = useMobile()
 
-const loading = ref(false)
+const loading = ref(true)
 const processes = ref([])
 const activeTab = ref('processes')
 let refreshTimer = null
@@ -208,6 +213,7 @@ const editForm = ref({
   script: '',
   args: '',
   cwd: '',
+  port: null,
   interpreter: ''
 })
 
@@ -215,8 +221,9 @@ function isDeployedWorker(name) {
   return workerProjects.value.some(p => p.name === name)
 }
 
-onMounted(() => {
-  fetchProcesses()
+onMounted(async () => {
+  await fetchProcesses()
+  loading.value = false
   fetchConfig()
   fetchWorkerProjects()
   refreshTimer = setInterval(() => {
@@ -230,11 +237,9 @@ onUnmounted(() => {
 })
 
 async function fetchProcesses(silent = false) {
-  if (!silent) loading.value = true
   try {
     processes.value = await get('/pm2/processes')
   } catch {}
-  if (!silent) loading.value = false
 }
 
 async function fetchWorkerProjects() {
@@ -292,6 +297,7 @@ async function handleEdit(row) {
       script: data.script || '',
       args: data.args || '',
       cwd: data.cwd || '',
+      port: data.port ? Number(data.port) : null,
       interpreter: data.interpreter || ''
     }
     editDialogVisible.value = true
@@ -307,7 +313,11 @@ async function handleSaveEdit() {
   }
   savingEdit.value = true
   try {
-    await put(`/pm2/processes/${editingProcessName.value}`, editForm.value)
+    const payload = { ...editForm.value }
+    if (payload.port === null || payload.port === undefined) {
+      delete payload.port
+    }
+    await put(`/pm2/processes/${editingProcessName.value}`, payload)
     ElMessage.success('进程已更新并重启')
     editDialogVisible.value = false
     fetchProcesses()
@@ -327,11 +337,12 @@ async function handleDeleteProcess(row) {
   } catch {}
 }
 
-async function handleRestart(row) {
+async function handleStart(row) {
   try {
-    await ElMessageBox.confirm(`确定重启 ${row.name}？`, '确认')
-    await post(`/pm2/restart/${row.name}`)
-    ElMessage.success('已重启')
+    const action = row.status === 'online' ? '重启' : '启动'
+    await ElMessageBox.confirm(`确定${action} ${row.name}？`, '确认')
+    await post(`/pm2/start/${row.name}`)
+    ElMessage.success(`${action}成功`)
     fetchProcesses()
   } catch {}
 }
@@ -454,7 +465,7 @@ function formatUptime(seconds) {
 }
 .actions-wrap {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   white-space: nowrap;
 }
 .actions-wrap .el-button--small {
@@ -478,15 +489,36 @@ function formatUptime(seconds) {
     flex-wrap: wrap;
   }
   .refresh-bar .el-button {
-    width: 100%;
     margin-left: 0 !important;
     margin-right: 0 !important;
+  }
+  .refresh-bar .el-button:nth-child(-n+2) {
+    flex: 1;
+  }
+  .refresh-bar .el-button:nth-child(3) {
+    width: 100%;
   }
   .config-toolbar .el-button {
     width: 100%;
   }
   :deep(.el-table) {
     font-size: 12px;
+  }
+  :deep(.el-table .el-table__cell) {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :deep(.el-table .el-table__cell:nth-child(1)) {
+    min-width: 80px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(8)) {
+    max-width: 170px;
+  }
+  .actions-wrap .el-button--small {
+    font-size: 10px;
+    padding: 2px 1px !important;
   }
   .log-output {
     font-size: 12px;

@@ -1,5 +1,6 @@
 <template>
-  <div class="nginx-manager">
+  <div class="nginx-manager" v-loading="loading" element-loading-text="加载中...">
+    <template v-if="!loading">
     <!-- Status Bar -->
     <div class="status-bar">
       <el-tag :type="nginxRunning ? 'success' : 'danger'" size="small">
@@ -25,7 +26,7 @@
           <el-table-column prop="name" label="文件名" min-width="180" />
           <el-table-column prop="serverName" label="域名" min-width="160" />
           <el-table-column prop="proxyPass" label="反代目标" min-width="200" />
-          <el-table-column prop="listen" label="监听端口" width="100" />
+          <el-table-column prop="listen" label="监听端口" width="110" />
           <el-table-column label="状态" width="80">
             <template #default="{ row }">
               <el-tag v-if="row.isSelfManaged" size="small" type="info">只读</el-tag>
@@ -119,6 +120,7 @@
         class="config-editor"
       />
     </el-dialog>
+  </template>
   </div>
 </template>
 
@@ -130,13 +132,13 @@ import { useMobile } from '../composables/useMobile'
 
 const { isMobile } = useMobile()
 
-const loading = ref(false)
+const loading = ref(true)
 const reloading = ref(false)
 const nginxRunning = ref(false)
 const statusMsg = ref('')
 const sites = ref([])
 const backups = ref([])
-const loadingBackups = ref(false)
+const loadingBackups = ref(true)
 const activeTab = ref('sites')
 
 // Add
@@ -156,9 +158,10 @@ const showBackup = ref(false)
 const backupName = ref('')
 const backupContent = ref('')
 
-onMounted(() => {
-  fetchStatus()
-  fetchSites()
+onMounted(async () => {
+  await Promise.all([fetchStatus(), fetchSites()])
+  loading.value = false
+  fetchBackups()
 })
 
 async function fetchStatus() {
@@ -172,11 +175,16 @@ async function fetchStatus() {
 }
 
 async function fetchSites() {
-  loading.value = true
   try {
     sites.value = await get('/nginx/sites')
   } catch {}
-  loading.value = false
+}
+
+async function fetchBackups() {
+  try {
+    backups.value = await get('/nginx/backups')
+  } catch {}
+  loadingBackups.value = false
 }
 
 async function handleValidate() {
@@ -332,12 +340,33 @@ function formatBytes(bytes) {
   }
   .status-actions .el-button {
     flex: 1;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
   .toolbar .el-button {
     width: 100%;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
   :deep(.el-dialog) {
     width: 92% !important;
+  }
+  :deep(.el-table .el-table__cell:nth-child(1)) {
+    min-width: 100px;
+    max-width: 120px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(2)) {
+    min-width: 0;
+    max-width: 100px;
+  }
+  :deep(.el-table .el-table__cell:nth-child(3)) {
+    min-width: 0;
+    max-width: 120px;
+  }
+  :deep(.el-table .el-table__cell) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   :deep(.el-table) {
     font-size: 12px;

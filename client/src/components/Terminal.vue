@@ -103,7 +103,7 @@ function initTerminal() {
     letterSpacing: 0,
     lineHeight: 1,
 
-    fontSize: 14,
+    fontSize: window.innerWidth < 768 ? 10 : 14,
     theme: {
       background: '#1a1a2e',
       foreground: '#e0e0e0',

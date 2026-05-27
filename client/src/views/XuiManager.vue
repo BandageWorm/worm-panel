@@ -1,6 +1,7 @@
 <template>
-  <div class="xui-manager">
+  <div class="xui-manager" v-loading="loading" element-loading-text="加载中...">
     <!-- Status Cards -->
+    <template v-if="!loading">
     <el-row :gutter="16">
       <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="never">
@@ -30,7 +31,7 @@
         <el-card shadow="never">
           <div class="stat-item">
             <div class="stat-label">管理端口</div>
-            <div class="stat-value">{{ status.port || '--' }}</div>
+            <div class="stat-value" style="font-size:14px">{{ status.port || '--' }}</div>
           </div>
         </el-card>
       </el-col>
@@ -140,6 +141,7 @@
         </div>
       </div>
     </el-card>
+  </template>
   </div>
 </template>
 
@@ -147,6 +149,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post, del } from '../api'
+
+const loading = ref(true)
 
 const status = reactive({
   installed: false, running: false, version: null, port: null,
@@ -165,6 +169,7 @@ async function fetchStatus() {
     const res = await get('/xui/status')
     Object.assign(status, res)
   } catch {}
+  loading.value = false
 }
 
 function openDirectUrl() {
@@ -303,6 +308,13 @@ function copyCmd() {
 }
 
 @media (max-width: 768px) {
+  .xui-manager .el-col {
+    margin-bottom: 16px;
+  }
+  .xui-manager .el-col:last-child,
+  .xui-manager .el-col:nth-last-child(2) {
+    margin-bottom: 0;
+  }
   .proxy-form {
     flex-wrap: wrap;
   }
@@ -311,6 +323,8 @@ function copyCmd() {
   }
   .proxy-form .el-button {
     width: 100%;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
   .access-info {
     flex-wrap: wrap;
@@ -318,6 +332,8 @@ function copyCmd() {
   }
   .direct-access .el-button {
     width: 100%;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
   .section-card :deep(.el-descriptions__cell) {
     word-break: break-all;

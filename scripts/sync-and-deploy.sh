@@ -36,7 +36,7 @@ MODIFIED="${MODIFIED# }"
 UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
 DELETED=$(git diff HEAD --name-only --diff-filter=D 2>/dev/null || true)
 
-ALL_FILES=$(echo -e "$MODIFIED\n$UNTRACKED" | grep -v '^$' | grep -v 'node_modules' | grep -v '\.git' | grep -v 'public/' | grep -v 'data/' | grep -v '^openspec/' | sort -u || true)
+ALL_FILES=$(echo -e "$MODIFIED\n$UNTRACKED" | grep -v '^$' | grep -v 'node_modules' | grep -v '\.git' | grep -v 'public/' | grep -v 'data/' | grep -v '^openspec/' | grep -v '^.claude/' | sort -u || true)
 
 if [ -z "$ALL_FILES" ]; then
   log_info "No files to sync"

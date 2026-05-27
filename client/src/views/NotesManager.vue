@@ -1,5 +1,6 @@
 <template>
-  <div class="notes-manager">
+  <div class="notes-manager" v-loading="loading" element-loading-text="加载中...">
+    <template v-if="!loading">
     <div class="notes-sidebar">
       <div class="sidebar-header">
         <el-button size="small" type="primary" @click="handleNew">新建笔记</el-button>
@@ -62,6 +63,7 @@
         <el-button type="primary" @click="confirmNew">创建</el-button>
       </template>
     </el-dialog>
+  </template>
   </div>
 </template>
 
@@ -73,7 +75,7 @@ import { get, post, put, del } from '../api'
 
 const md = new MarkdownIt({ html: true, linkify: true })
 
-const loading = ref(false)
+const loading = ref(true)
 const notes = ref([])
 const currentNote = ref('')
 const editorContent = ref('')
@@ -85,14 +87,15 @@ const importInput = ref(null)
 
 const renderedContent = computed(() => md.render(editorContent.value || ''))
 
-onMounted(() => fetchNotes())
+onMounted(async () => {
+  await fetchNotes()
+  loading.value = false
+})
 
 async function fetchNotes() {
-  loading.value = true
   try {
     notes.value = await get('/notes')
   } catch {}
-  loading.value = false
 }
 
 async function openNote(note) {
@@ -375,6 +378,12 @@ async function handleImport(e) {
     flex: none;
     max-height: 25vh;
   }
+  .note-item {
+    padding: 6px 12px;
+  }
+  .note-time {
+    font-size: 11px;
+  }
   .notes-editor {
     flex: 1;
     min-height: 0;
@@ -386,6 +395,14 @@ async function handleImport(e) {
   .toolbar-actions {
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+  .toolbar-actions .el-button {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  .sidebar-header .el-button {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
   .preview-body {
     padding: 12px 16px;
