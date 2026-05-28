@@ -124,6 +124,7 @@ function createSite({ domain, targetPort, ssl, sslRedirect, certPath, keyPath })
     const httpBlock = sslRedirect === false ? `server {
     listen 80;
     server_name ${domain};
+    client_max_body_size 500M;
 
     location / {
         proxy_pass http://127.0.0.1:${targetPort};
@@ -141,6 +142,7 @@ function createSite({ domain, targetPort, ssl, sslRedirect, certPath, keyPath })
     configText = `server {
     listen 443 ssl;
     server_name ${domain};
+    client_max_body_size 500M;
 
     ssl_certificate     ${certPath};
     ssl_certificate_key ${keyPath};
@@ -160,6 +162,7 @@ ${httpBlock}
     configText = `server {
     listen 80;
     server_name ${domain};
+    client_max_body_size 500M;
 
     location / {
         proxy_pass http://127.0.0.1:${targetPort};
@@ -211,18 +214,19 @@ function updateSite(name, content) {
   fs.copyFileSync(filePath, path.join(BACKUP_DIR, backupName));
   cleanupOldBackups();
 
-  // Validate before writing
-  const tmpPath = filePath + '.tmp';
-  fs.writeFileSync(tmpPath, content, 'utf8');
+  // Save original content for rollback
+  const originalContent = fs.readFileSync(filePath, 'utf8');
+
+  // Write new content and validate
+  fs.writeFileSync(filePath, content, 'utf8');
   try {
     nginxExec('nginx -t 2>&1');
   } catch (e) {
-    fs.unlinkSync(tmpPath);
+    // Rollback to original content
+    fs.writeFileSync(filePath, originalContent, 'utf8');
     throw new Error(e.stderr?.trim() || 'nginx 配置校验失败');
   }
 
-  // Replace and reload
-  fs.renameSync(tmpPath, filePath);
   reload();
 }
 
@@ -275,6 +279,7 @@ function generateSelfConfig(domain, port) {
   return `server {
     listen 80;
     server_name ${domain};
+    client_max_body_size 500M;
 
     location / {
         proxy_pass http://127.0.0.1:${port};

@@ -9,7 +9,7 @@ function createApp() {
   const app = express();
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '2mb' }));
 
   // Request logging
   app.use((req, res, next) => {
@@ -52,6 +52,7 @@ function createApp() {
   driveRoute.setSyncDrive(sync.syncDrive, sync.isDriveSyncing);
   app.use('/api/drive', authMiddleware, driveRoute.router);
 
+  // SPA fallback
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api')) {
       res.sendFile(path.join(publicDir, 'index.html'));

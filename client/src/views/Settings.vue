@@ -154,13 +154,16 @@ async function handleSave() {
     }
 
     const res = await put('/settings', body)
-    ElMessage.success(res.message)
+    try { ElMessage.success(res.message) } catch { alert(res.message) }
 
     if (res.needsRestart) {
-      ElMessage.warning('已修改端口或模式，请重启面板使设置生效', 5000)
+      try { ElMessage.warning('已修改端口或模式，请重启面板使设置生效', 5000) } catch { alert('已修改端口或模式，请重启面板使设置生效') }
     }
   } catch (e) {
-    ElMessage.error(e.message)
+    console.error('=== Settings Save Error ===')
+    console.error('Error:', e)
+    console.error('Stack:', e?.stack)
+    try { ElMessage.error(e?.message || '保存失败') } catch { alert(e?.message || '保存失败') }
   } finally {
     saving.value = false
   }

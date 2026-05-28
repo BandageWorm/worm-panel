@@ -1,12 +1,20 @@
 const fs = require('fs');
 const path = require('path');
 
+const BLOCKED_PREFIXES = ['/proc', '/sys', '/dev'];
+
 function safeResolve(basePath) {
   // Resolve to absolute path and prevent directory traversal
   const resolved = path.resolve(basePath);
   // Allow only paths under root
   if (!resolved.startsWith('/')) {
     throw new Error('只允许绝对路径');
+  }
+  // Block sensitive system paths
+  for (const prefix of BLOCKED_PREFIXES) {
+    if (resolved === prefix || resolved.startsWith(prefix + '/')) {
+      throw new Error('禁止访问系统敏感路径');
+    }
   }
   return resolved;
 }

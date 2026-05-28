@@ -15,7 +15,12 @@ async function request(path, options = {}) {
     throw new Error('登录已过期')
   }
 
-  const data = await res.json()
+  let data
+  try {
+    data = await res.json()
+  } catch {
+    throw new Error('服务器响应异常')
+  }
   if (!res.ok) {
     throw new Error(data.error || '请求失败')
   }

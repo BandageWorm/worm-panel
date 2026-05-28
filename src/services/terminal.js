@@ -24,7 +24,6 @@ function createTerminal(ws, req) {
   }
 
   let ptyProcess = null;
-  let buf = '';
 
   try {
     const os = require('os');
@@ -49,8 +48,6 @@ function createTerminal(ws, req) {
     const resizePty = (cols, rows) => {
       try { term.resize(cols, rows); } catch {}
     };
-
-    let isReconnectMessage = false;
 
     term.onData((data) => {
       try {
@@ -86,11 +83,6 @@ function createTerminal(ws, req) {
       }
     });
 
-    ws.on('close', () => {
-      try { term.kill(); } catch {}
-      ptyProcess = null;
-    });
-
   } catch (err) {
     // node-pty not available or failed to spawn
     ws.send(JSON.stringify({ type: 'output', data: `\r\n\x1b[31m终端启动失败: ${err.message}\x1b[0m\r\n` }));
@@ -98,7 +90,7 @@ function createTerminal(ws, req) {
     return;
   }
 
-  // Handle unexpected close
+  // Handle close and error
   const cleanup = () => {
     if (ptyProcess) {
       try { ptyProcess.kill(); } catch {}
