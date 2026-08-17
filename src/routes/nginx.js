@@ -5,8 +5,13 @@ const logger = require('../utils/logger');
 
 const router = Router();
 
-router.get('/status', (req, res) => {
-  res.json(nginx.getStatus());
+router.get('/status', async (req, res) => {
+  try {
+    const status = await nginx.getStatus();
+    res.json(status);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 router.get('/sites', (req, res) => {
@@ -15,14 +20,18 @@ router.get('/sites', (req, res) => {
 });
 
 router.get('/sites/:name', (req, res) => {
-  const content = nginx.getSite(req.params.name);
-  if (content === null) {
-    return res.status(404).json({ error: '站点配置不存在' });
+  try {
+    const content = nginx.getSite(req.params.name);
+    if (content === null) {
+      return res.status(404).json({ error: '站点配置不存在' });
+    }
+    res.json({ name: req.params.name, content });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
-  res.json({ name: req.params.name, content });
 });
 
-router.post('/sites', (req, res) => {
+router.post('/sites', async (req, res) => {
   try {
     const { domain, targetPort, ssl, sslRedirect } = req.body;
     if (!domain || !targetPort) {
@@ -39,8 +48,8 @@ router.post('/sites', (req, res) => {
       keyPath = certInfo.keyPath;
     }
 
-    const result = nginx.createSite({ domain, targetPort, ssl, sslRedirect, certPath, keyPath });
-    const status = nginx.getStatus();
+    const result = await nginx.createSite({ domain, targetPort, ssl, sslRedirect, certPath, keyPath });
+    const status = await nginx.getStatus();
     res.json({ success: true, ...result, nginxStatus: status });
   } catch (err) {
     logger.error('Nginx', `创建站点失败: ${err.message}`, err);
@@ -48,13 +57,13 @@ router.post('/sites', (req, res) => {
   }
 });
 
-router.put('/sites/:name', (req, res) => {
+router.put('/sites/:name', async (req, res) => {
   try {
     const { content } = req.body;
     if (!content) {
       return res.status(400).json({ error: '配置内容不能为空' });
     }
-    nginx.updateSite(req.params.name, content);
+    await nginx.updateSite(req.params.name, content);
     res.json({ success: true });
   } catch (err) {
     logger.error('Nginx', `更新站点 ${req.params.name} 失败: ${err.message}`, err);
@@ -62,9 +71,9 @@ router.put('/sites/:name', (req, res) => {
   }
 });
 
-router.delete('/sites/:name', (req, res) => {
+router.delete('/sites/:name', async (req, res) => {
   try {
-    nginx.deleteSite(req.params.name);
+    await nginx.deleteSite(req.params.name);
     res.json({ success: true });
   } catch (err) {
     logger.error('Nginx', `删除站点 ${req.params.name} 失败: ${err.message}`, err);
@@ -72,16 +81,16 @@ router.delete('/sites/:name', (req, res) => {
   }
 });
 
-router.post('/reload', (req, res) => {
-  const result = nginx.reload();
+router.post('/reload', async (req, res) => {
+  const result = await nginx.reload();
   if (!result.success) {
     logger.error('Nginx', `重载失败: ${result.message}`);
   }
   res.json(result);
 });
 
-router.post('/validate', (req, res) => {
-  const result = nginx.validate();
+router.post('/validate', async (req, res) => {
+  const result = await nginx.validate();
   if (!result.valid) {
     logger.error('Nginx', `配置校验失败: ${result.message}`);
   }
@@ -94,11 +103,15 @@ router.get('/backups', (req, res) => {
 });
 
 router.get('/backups/:name', (req, res) => {
-  const content = nginx.getBackup(req.params.name);
-  if (content === null) {
-    return res.status(404).json({ error: '备份不存在' });
+  try {
+    const content = nginx.getBackup(req.params.name);
+    if (content === null) {
+      return res.status(404).json({ error: '备份不存在' });
+    }
+    res.json({ name: req.params.name, content });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
-  res.json({ name: req.params.name, content });
 });
 
 module.exports = router;

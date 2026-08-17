@@ -1,19 +1,37 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFile, exec } = require('child_process');
+const { promisify } = require('util');
 const nginx = require('./nginx');
+
+const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
 
 const HOME_DIR = process.env.HOME || '/root';
 const ACME_HOME = path.join(HOME_DIR, '.acme.sh');
 const ACME_BIN = path.join(ACME_HOME, 'acme.sh');
 
-function acmeExec(args) {
+// 域名校验：防止命令注入
+function validateDomain(domain) {
+  if (!domain || typeof domain !== 'string') {
+    throw new Error('域名不能为空');
+  }
+  // 合法域名字符：字母、数字、-、.、* (通配符)
+  if (!/^[a-zA-Z0-9.*\-]+$/.test(domain)) {
+    throw new Error('域名格式不合法');
+  }
+}
+
+async function acmeExec(args) {
   if (!fs.existsSync(ACME_BIN)) {
     throw new Error('acme.sh 未安装');
   }
-  const cmd = `${ACME_BIN} ${args} 2>&1`;
   try {
-    return execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    const { stdout } = await execFileAsync(ACME_BIN, args, {
+      encoding: 'utf8',
+      timeout: 120000
+    });
+    return stdout;
   } catch (e) {
     const output = e.stdout || e.stderr || e.message || '';
     throw new Error(output.trim());
@@ -24,15 +42,15 @@ function checkInstalled() {
   return fs.existsSync(ACME_BIN);
 }
 
-function install() {
+async function install() {
   if (checkInstalled()) {
     return { success: true, message: 'acme.sh 已安装' };
   }
   try {
-    execSync(
-      'curl -fsSL https://get.acme.sh | sh 2>&1',
-      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 60000 }
-    );
+    await execAsync('curl -fsSL https://get.acme.sh | sh', {
+      encoding: 'utf8',
+      timeout: 60000
+    });
     return { success: true, message: 'acme.sh 安装成功' };
   } catch (e) {
     const output = e.stdout || e.stderr || e.message || '';
@@ -56,7 +74,6 @@ function listCerts() {
     if (!fs.statSync(itemPath).isDirectory()) continue;
     if (item.startsWith('.')) continue;
 
-    // ECC 证书目录名带 _ecc 后缀，但内部文件名使用原始域名
     const keyName = item.endsWith('_ecc') ? item.slice(0, -4) : item;
     const fullchainPath = path.join(itemPath, 'fullchain.cer');
     const keyPath = path.join(itemPath, `${keyName}.key`);
@@ -67,7 +84,6 @@ function listCerts() {
     let expireDate = null;
     let issuedDate = null;
 
-    // Try to read meta info
     if (fs.existsSync(metaFile)) {
       const meta = fs.readFileSync(metaFile, 'utf8');
       const expireMatch = meta.match(/Le_NextRenewTimeStr\s*=\s*['"]?(.+?)['"]?\s*$/m);
@@ -76,14 +92,13 @@ function listCerts() {
       if (issuedMatch) issuedDate = issuedMatch[1].trim();
     }
 
-    // If no expire from meta, read cert directly
+    // If no expire from meta, read cert directly (async not needed here, called rarely)
     if (!expireDate) {
       try {
-        const out = execSync(
-          `openssl x509 -enddate -noout -in "${fullchainPath}" 2>&1`,
-          { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
-        );
-        const match = out.match(/notAfter=(.+)/);
+        const { stdout } = require('child_process').spawnSync('openssl', [
+          'x509', '-enddate', '-noout', '-in', fullchainPath
+        ], { encoding: 'utf8' });
+        const match = (stdout || '').match(/notAfter=(.+)/);
         if (match) expireDate = match[1].trim();
       } catch {}
     }
@@ -100,8 +115,9 @@ function listCerts() {
   return certs.sort((a, b) => a.domain.localeCompare(b.domain));
 }
 
-function issueCert(domain) {
-  // 使用 Let's Encrypt CA（acme.sh 默认已改为 ZeroSSL，后者需邮箱注册）
+async function issueCert(domain) {
+  validateDomain(domain);
+
   let useNginx = false;
   try {
     const sites = nginx.listSites();
@@ -110,17 +126,20 @@ function issueCert(domain) {
 
   let args;
   if (useNginx) {
-    args = `--issue -d "${domain}" --nginx --server letsencrypt`;
+    args = ['--issue', '-d', domain, '--nginx', '--server', 'letsencrypt'];
   } else {
-    args = `--issue -d "${domain}" --standalone --server letsencrypt --pre-hook "systemctl stop nginx 2>/dev/null || service nginx stop 2>/dev/null || true" --post-hook "systemctl start nginx 2>/dev/null || service nginx start 2>/dev/null || true"`;
+    args = [
+      '--issue', '-d', domain, '--standalone', '--server', 'letsencrypt',
+      '--pre-hook', 'systemctl stop nginx 2>/dev/null || service nginx stop 2>/dev/null || true',
+      '--post-hook', 'systemctl start nginx 2>/dev/null || service nginx start 2>/dev/null || true'
+    ];
   }
 
   let out;
   try {
-    out = acmeExec(args);
+    out = await acmeExec(args);
   } catch (e) {
-    // acme.sh 可能因各种警告（如 renewal 相关）退出非零码，但证书实际已签发
-    // 检查证书文件是否存在，存在则视为成功
+    // acme.sh 可能因各种警告退出非零码，但证书实际已签发
     const cert = getCertInfo(domain);
     if (cert) {
       return { success: true, message: '证书已存在: ' + (e.message || '').trim() };
@@ -130,7 +149,9 @@ function issueCert(domain) {
   return { success: true, message: out.trim() };
 }
 
-function renewCert(domain) {
+async function renewCert(domain) {
+  validateDomain(domain);
+
   let useNginx = false;
   try {
     const sites = nginx.listSites();
@@ -139,14 +160,18 @@ function renewCert(domain) {
 
   let args;
   if (useNginx) {
-    args = `--renew -d "${domain}" --nginx --server letsencrypt`;
+    args = ['--renew', '-d', domain, '--nginx', '--server', 'letsencrypt'];
   } else {
-    args = `--renew -d "${domain}" --standalone --server letsencrypt --pre-hook "systemctl stop nginx 2>/dev/null || service nginx stop 2>/dev/null || true" --post-hook "systemctl start nginx 2>/dev/null || service nginx start 2>/dev/null || true"`;
+    args = [
+      '--renew', '-d', domain, '--standalone', '--server', 'letsencrypt',
+      '--pre-hook', 'systemctl stop nginx 2>/dev/null || service nginx stop 2>/dev/null || true',
+      '--post-hook', 'systemctl start nginx 2>/dev/null || service nginx start 2>/dev/null || true'
+    ];
   }
 
   let out;
   try {
-    out = acmeExec(args);
+    out = await acmeExec(args);
   } catch (e) {
     const msg = e.message || '';
     if (msg.includes('Skipping') || msg.includes('Next renewal time')) {
@@ -156,19 +181,20 @@ function renewCert(domain) {
   }
 
   // Reload nginx after renewal
-  try { nginx.reload(); } catch {}
+  try { await nginx.reload(); } catch {}
   return { success: true, message: '证书续期成功' };
 }
 
-function renewAllCerts() {
-  const out = acmeExec('--renew-all --server letsencrypt');
-  try { nginx.reload(); } catch {}
+async function renewAllCerts() {
+  const out = await acmeExec(['--renew-all', '--server', 'letsencrypt']);
+  try { await nginx.reload(); } catch {}
   return { success: true, message: out.trim() };
 }
 
-function deleteCert(domain) {
+async function deleteCert(domain) {
+  validateDomain(domain);
+
   const certsDir = path.join(ACME_HOME);
-  // Find matching cert directories (both normal and _ecc)
   const items = fs.readdirSync(certsDir).filter(item => {
     if (item.startsWith('.')) return false;
     const stat = fs.statSync(path.join(certsDir, item));
@@ -182,9 +208,9 @@ function deleteCert(domain) {
 
   // Remove via acme.sh first
   try {
-    acmeExec(`--remove -d "${domain}"`);
+    await acmeExec(['--remove', '-d', domain]);
   } catch (e) {
-    // Continue even if acme.sh remove fails, we'll clean up manually
+    // Continue even if acme.sh remove fails
   }
 
   // Clean up directories
@@ -201,8 +227,9 @@ function getCertInfo(domain) {
   return certs.find(c => c.domain === domain || c.domain === `${domain}_ecc`) || null;
 }
 
-function applyToNginx(domain, targetPort) {
-  // Find existing nginx site config for this domain
+async function applyToNginx(domain, targetPort) {
+  validateDomain(domain);
+
   const sites = nginx.listSites();
   const site = sites.find(s => s.serverName === domain);
 
@@ -238,7 +265,6 @@ server {
 }
 `;
 
-  // Write config
   const sitesPath = '/etc/nginx/sites-enabled';
   if (!fs.existsSync(sitesPath)) {
     fs.mkdirSync(sitesPath, { recursive: true });
@@ -247,17 +273,15 @@ server {
   const fileName = `${domain}.conf`;
   const filePath = path.join(sitesPath, fileName);
 
-  // Backup and write
   fs.writeFileSync(filePath, sslConfig, 'utf8');
 
   // Validate and reload
-  const validateResult = nginx.validate();
+  const validateResult = await nginx.validate();
   if (!validateResult.valid) {
-    // Restore backup if exists
     throw new Error('Nginx 配置校验失败: ' + validateResult.message);
   }
 
-  nginx.reload();
+  await nginx.reload();
   return { fileName, message: `SSL 配置已应用到 ${domain}` };
 }
 

@@ -9,17 +9,16 @@ router.get('/status', (req, res) => {
 });
 
 router.get('/info', (req, res) => {
-  // Same as status for now, returns full info
   res.json(xui.getStatus());
 });
 
-router.post('/proxy', (req, res) => {
+router.post('/proxy', async (req, res) => {
   try {
     const { domain } = req.body;
     if (!domain) {
       return res.status(400).json({ error: '域名不能为空' });
     }
-    const result = xui.setProxy(domain);
+    const result = await xui.setProxy(domain);
     res.json(result);
   } catch (e) {
     logger.error('XUI', `设置反代失败: ${req.body?.domain}`, e);
@@ -27,9 +26,9 @@ router.post('/proxy', (req, res) => {
   }
 });
 
-router.delete('/proxy', (req, res) => {
+router.delete('/proxy', async (req, res) => {
   try {
-    const result = xui.removeProxy();
+    const result = await xui.removeProxy();
     res.json(result);
   } catch (e) {
     logger.error('XUI', '删除反代失败', e);

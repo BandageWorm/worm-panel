@@ -1,7 +1,11 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { exec, execFile } = require('child_process');
+const { promisify } = require('util');
 const config = require('./config');
+
+const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups', 'nginx');
@@ -10,14 +14,35 @@ const MAX_BACKUPS = 30;
 
 const SITES_ENABLED = '/etc/nginx/sites-enabled';
 
-// Wrap nginx commands, auto-retry with sudo if needed (WSL2 non-root)
-function nginxExec(cmd) {
+// 校验站点名/备份名，防止路径穿越
+function validateSiteName(name) {
+  if (!name || typeof name !== 'string') {
+    throw new Error('名称不能为空');
+  }
+  if (name.includes('..') || name.includes('/') || name.includes('\\') || name.includes('\0')) {
+    throw new Error('名称包含非法字符');
+  }
+  if (!/^[a-zA-Z0-9._\-]+$/.test(name)) {
+    throw new Error('名称只允许字母、数字、-、_、.');
+  }
+}
+
+// 异步执行 nginx 命令，自动 sudo 重试
+async function nginxExec(args) {
   try {
-    return execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    const { stdout } = await execFileAsync('nginx', args, {
+      encoding: 'utf8',
+      timeout: 10000
+    });
+    return stdout;
   } catch (e) {
     const output = (e.stderr || '') + (e.stdout || '');
-    if (e.status === 1 && output.includes('Permission denied')) {
-      return execSync('sudo ' + cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    if (output.includes('Permission denied')) {
+      const { stdout } = await execFileAsync('sudo', ['nginx', ...args], {
+        encoding: 'utf8',
+        timeout: 10000
+      });
+      return stdout;
     }
     throw e;
   }
@@ -36,14 +61,14 @@ function ensureBackupDir() {
 
 // ── Status ──
 
-function getStatus() {
-  // Check if nginx process is running (works without pidof/pgrep)
+async function getStatus() {
+  // Check if nginx process is running
   let running = false;
   try {
-    const out = execSync('ps aux 2>/dev/null | grep -c "[n]ginx"', {
-      encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe']
+    const { stdout } = await execAsync('ps aux 2>/dev/null | grep -c "[n]ginx"', {
+      encoding: 'utf8', timeout: 5000
     });
-    running = parseInt(out.trim(), 10) > 0;
+    running = parseInt(stdout.trim(), 10) > 0;
   } catch {
     running = false;
   }
@@ -52,7 +77,7 @@ function getStatus() {
   let configValid = false;
   let message = '';
   try {
-    nginxExec('nginx -t 2>&1');
+    await nginxExec(['-t']);
     configValid = true;
     message = running ? '运行正常' : '进程未运行';
   } catch (e) {
@@ -101,6 +126,7 @@ function listSites() {
 }
 
 function getSite(name) {
+  validateSiteName(name);
   const sitesPath = getSitesPath();
   const filePath = path.join(sitesPath, name);
   if (!fs.existsSync(filePath)) {
@@ -109,12 +135,11 @@ function getSite(name) {
   return fs.readFileSync(filePath, 'utf8');
 }
 
-function createSite({ domain, targetPort, ssl, sslRedirect, certPath, keyPath }) {
+async function createSite({ domain, targetPort, ssl, sslRedirect, certPath, keyPath }) {
   const sitesPath = getSitesPath();
   const fileName = domain.replace(/[^a-zA-Z0-9.-]/g, '') + '.conf';
   const filePath = path.join(sitesPath, fileName);
 
-  // Use template with SSL if configured with cert, otherwise plain HTTP
   let configText;
   if (ssl) {
     if (!certPath || !keyPath) {
@@ -186,17 +211,18 @@ ${httpBlock}
   // Write and validate
   fs.writeFileSync(filePath, configText, 'utf8');
   try {
-    nginxExec('nginx -t 2>&1');
+    await nginxExec(['-t']);
   } catch (e) {
     fs.unlinkSync(filePath);
     throw new Error((e.stderr || e.stdout || '').trim() || 'nginx 配置校验失败');
   }
 
-  reload();
+  await reload();
   return { fileName, configText };
 }
 
-function updateSite(name, content) {
+async function updateSite(name, content) {
+  validateSiteName(name);
   if (name === 'panel.conf' || name === 'default.conf') {
     throw new Error('面板自身配置不可编辑');
   }
@@ -220,17 +246,18 @@ function updateSite(name, content) {
   // Write new content and validate
   fs.writeFileSync(filePath, content, 'utf8');
   try {
-    nginxExec('nginx -t 2>&1');
+    await nginxExec(['-t']);
   } catch (e) {
     // Rollback to original content
     fs.writeFileSync(filePath, originalContent, 'utf8');
-    throw new Error(e.stderr?.trim() || 'nginx 配置校验失败');
+    throw new Error((e.stderr || '').trim() || 'nginx 配置校验失败');
   }
 
-  reload();
+  await reload();
 }
 
-function deleteSite(name) {
+async function deleteSite(name) {
+  validateSiteName(name);
   if (name === 'panel.conf' || name === 'default.conf') {
     throw new Error('面板自身配置不可删除');
   }
@@ -249,23 +276,23 @@ function deleteSite(name) {
   cleanupOldBackups();
 
   fs.unlinkSync(filePath);
-  reload();
+  await reload();
 }
 
 // ── Validate & Reload ──
 
-function validate() {
+async function validate() {
   try {
-    const out = nginxExec('nginx -t 2>&1');
-    return { valid: true, message: out.trim() };
+    const out = await nginxExec(['-t']);
+    return { valid: true, message: (out || '').trim() || 'nginx: configuration file test is successful' };
   } catch (e) {
     return { valid: false, message: (e.stderr || e.stdout || '').trim() || 'nginx 配置校验失败' };
   }
 }
 
-function reload() {
+async function reload() {
   try {
-    nginxExec('nginx -s reload 2>&1');
+    await nginxExec(['-s', 'reload']);
     return { success: true, message: 'Nginx 已重载' };
   } catch (e) {
     const errMsg = (e.stderr || e.stdout || '').trim() || '重载失败';
@@ -297,7 +324,6 @@ function generateSelfConfig(domain, port) {
 function writeSelfConfig() {
   const cfg = config.load();
   if (cfg.mode !== 'proxy' || !cfg.domain) {
-    // Remove panel.conf if exists but shouldn't
     const selfPath = path.join(getSitesPath(), 'panel.conf');
     if (fs.existsSync(selfPath)) {
       fs.unlinkSync(selfPath);
@@ -342,13 +368,11 @@ function writeDefaultConfig() {
     fs.mkdirSync(sitesPath, { recursive: true });
   }
 
-  // Remove legacy nginx default site (e.g. /etc/nginx/sites-enabled/default) to avoid default_server conflict
   const legacyDefault = path.join(sitesPath, 'default');
   if (fs.existsSync(legacyDefault)) {
     try { fs.unlinkSync(legacyDefault); } catch {}
   }
 
-  // Ensure the default HTML page exists
   if (!fs.existsSync(DEFAULT_SITE_DIR)) {
     fs.mkdirSync(DEFAULT_SITE_DIR, { recursive: true });
   }
@@ -389,6 +413,7 @@ function listBackups() {
 }
 
 function getBackup(name) {
+  validateSiteName(name);
   const filePath = path.join(BACKUP_DIR, name);
   if (!fs.existsSync(filePath)) {
     return null;

@@ -189,7 +189,7 @@ function getStatus() {
   };
 }
 
-function setProxy(domain) {
+async function setProxy(domain) {
   const status = getStatus();
   if (!status.installed) {
     throw new Error('3X-UI 未安装');
@@ -273,14 +273,14 @@ server {
   // Validate and reload nginx
   try {
     const nginx = require('./nginx');
-    nginx.validate();
-    nginx.reload();
+    await nginx.validate();
+    await nginx.reload();
   } catch {}
 
   return { domain, url: proxyUrl, port: status.port };
 }
 
-function removeProxy() {
+async function removeProxy() {
   const cfg = config.load();
   if (cfg.xui) cfg.xui.proxy = null;
   config.save(cfg);
@@ -291,7 +291,7 @@ function removeProxy() {
     fs.unlinkSync(configPath);
     try {
       const nginx = require('./nginx');
-      nginx.reload();
+      await nginx.reload();
     } catch {}
   }
 

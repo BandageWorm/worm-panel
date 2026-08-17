@@ -1,13 +1,49 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
+const { promisify } = require('util');
 const pm2 = require('pm2');
 const logger = require('../utils/logger');
+
+const execFileAsync = promisify(execFile);
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const WORKERS_FILE = path.join(DATA_DIR, 'workers.json');
 const WORKERS_CODE_DIR = path.join(DATA_DIR, 'workers');
 const DEPLOY_TIMEOUT = 120000;
+
+// 输入校验：只允许安全的 git repo URL
+function validateRepo(repo) {
+  if (!repo || typeof repo !== 'string') {
+    throw new Error('repo 地址不能为空');
+  }
+  // 允许 https://、git://、git@host:path 格式
+  const safePattern = /^(https?:\/\/[^\s;|&`$]+|git:\/\/[^\s;|&`$]+|git@[^\s;|&`$]+:[^\s;|&`$]+)$/;
+  if (!safePattern.test(repo)) {
+    throw new Error('repo 地址格式不合法');
+  }
+}
+
+// 输入校验：分支名只允许合法字符
+function validateBranch(branch) {
+  if (!branch) return;
+  // git 分支名：字母、数字、-、_、/、.
+  const safePattern = /^[a-zA-Z0-9._\-\/]+$/;
+  if (!safePattern.test(branch)) {
+    throw new Error('分支名包含非法字符');
+  }
+}
+
+// 输入校验：项目名只允许安全字符
+function validateName(name) {
+  if (!name || typeof name !== 'string') {
+    throw new Error('项目名不能为空');
+  }
+  const safePattern = /^[a-zA-Z0-9._\-]+$/;
+  if (!safePattern.test(name)) {
+    throw new Error('项目名只允许字母、数字、-、_、.');
+  }
+}
 
 function buildPath() {
   const paths = process.env.PATH ? process.env.PATH.split(path.delimiter) : [];
@@ -42,7 +78,24 @@ function saveProjects(projects) {
   fs.writeFileSync(WORKERS_FILE, JSON.stringify(projects, null, 2), 'utf8');
 }
 
+// 解析 npx 完整路径
+function resolveNpxBin() {
+  try {
+    return execFileSync('which', ['npx'], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: buildPath() }
+    }).trim().split('\n')[0];
+  } catch {
+    return 'npx';
+  }
+}
+
 async function deploy({ repo, name, entry, branch, port }) {
+  // 输入校验
+  validateRepo(repo);
+  validateName(name);
+  validateBranch(branch);
+
   const projects = getProjects();
   if (projects.find(p => p.name === name)) {
     throw new Error(`项目 "${name}" 已存在`);
@@ -52,21 +105,24 @@ async function deploy({ repo, name, entry, branch, port }) {
   if (!fs.existsSync(WORKERS_CODE_DIR)) fs.mkdirSync(WORKERS_CODE_DIR, { recursive: true });
   if (fs.existsSync(projectPath)) fs.rmSync(projectPath, { recursive: true, force: true });
 
-  // 1. git clone
+  // 1. git clone — 使用 execFileAsync 避免命令注入
   logger.info('GitWorker', `Cloning ${repo} branch ${branch || 'main'}...`);
-  const branchFlag = branch && !['main', 'master'].includes(branch) ? `--branch ${branch}` : '';
-  execSync(`git clone ${branchFlag} --depth 1 ${repo} "${projectPath}"`, {
-    stdio: 'pipe',
+  const cloneArgs = ['clone', '--depth', '1'];
+  if (branch && !['main', 'master'].includes(branch)) {
+    cloneArgs.push('--branch', branch);
+  }
+  cloneArgs.push(repo, projectPath);
+
+  await execFileAsync('git', cloneArgs, {
     timeout: DEPLOY_TIMEOUT,
     env: { ...process.env, PATH: buildPath() }
   });
 
-  // 2. npm install
+  // 2. npm install — 使用 execFileAsync
   logger.info('GitWorker', 'Running npm install...');
   try {
-    execSync('npm install', {
+    await execFileAsync('npm', ['install'], {
       cwd: projectPath,
-      stdio: 'pipe',
       timeout: DEPLOY_TIMEOUT,
       env: { ...process.env, PATH: buildPath() }
     });
@@ -77,11 +133,7 @@ async function deploy({ repo, name, entry, branch, port }) {
   // 3. pm2 start wrangler dev (local miniflare)
   logger.info('GitWorker', `Starting pm2 with wrangler dev on port ${port || 8787}...`);
 
-  // Resolve full npx path (PM2 resolves script as file path, not from PATH)
-  let npxBin = 'npx';
-  try {
-    npxBin = execSync('command -v npx', { encoding: 'utf8', env: { ...process.env, PATH: buildPath() } }).trim().split('\n')[0];
-  } catch {}
+  const npxBin = resolveNpxBin();
 
   await new Promise((resolve, reject) => {
     pm2.connect(err => {
@@ -132,6 +184,8 @@ async function deploy({ repo, name, entry, branch, port }) {
 }
 
 async function removeProject(name) {
+  validateName(name);
+
   const projects = getProjects();
   const idx = projects.findIndex(p => p.name === name);
   const projectPath = idx !== -1 ? (projects[idx].path || path.join(WORKERS_CODE_DIR, name)) : path.join(WORKERS_CODE_DIR, name);
@@ -163,6 +217,11 @@ async function removeProject(name) {
 }
 
 async function deployGeneric({ repo, name, branch, command, port }) {
+  // 输入校验
+  validateRepo(repo);
+  validateName(name);
+  validateBranch(branch);
+
   const projects = getProjects();
   if (projects.find(p => p.name === name)) {
     throw new Error(`项目 "${name}" 已存在`);
@@ -172,21 +231,24 @@ async function deployGeneric({ repo, name, branch, command, port }) {
   if (!fs.existsSync(WORKERS_CODE_DIR)) fs.mkdirSync(WORKERS_CODE_DIR, { recursive: true });
   if (fs.existsSync(projectPath)) fs.rmSync(projectPath, { recursive: true, force: true });
 
-  // 1. git clone
+  // 1. git clone — 使用 execFileAsync 避免命令注入
   logger.info('GitWorker', `Cloning ${repo} branch ${branch || 'main'}...`);
-  const branchFlag = branch && !['main', 'master'].includes(branch) ? `--branch ${branch}` : '';
-  execSync(`git clone ${branchFlag} --depth 1 ${repo} "${projectPath}"`, {
-    stdio: 'pipe',
+  const cloneArgs = ['clone', '--depth', '1'];
+  if (branch && !['main', 'master'].includes(branch)) {
+    cloneArgs.push('--branch', branch);
+  }
+  cloneArgs.push(repo, projectPath);
+
+  await execFileAsync('git', cloneArgs, {
     timeout: DEPLOY_TIMEOUT,
     env: { ...process.env, PATH: buildPath() }
   });
 
-  // 2. npm install
+  // 2. npm install — 使用 execFileAsync
   logger.info('GitWorker', 'Running npm install...');
   try {
-    execSync('npm install', {
+    await execFileAsync('npm', ['install'], {
       cwd: projectPath,
-      stdio: 'pipe',
       timeout: DEPLOY_TIMEOUT,
       env: { ...process.env, PATH: buildPath() }
     });
@@ -194,15 +256,25 @@ async function deployGeneric({ repo, name, branch, command, port }) {
     logger.warn('GitWorker', `npm install failed (non-fatal): ${e.message}`);
   }
 
-  // 3. Resolve command to script + args
+  // 3. 解析命令为 script + args（白名单方式）
   const cmd = command || 'npm start';
   const parts = cmd.trim().split(/\s+/);
   let scriptBin = parts[0];
   const scriptArgs = parts.slice(1);
 
-  // Resolve full path for known commands
+  // 只允许已知安全的命令前缀
+  const ALLOWED_COMMANDS = ['npm', 'npx', 'node', 'pnpm', 'yarn', 'bun'];
+  if (!ALLOWED_COMMANDS.includes(scriptBin)) {
+    throw new Error(`不允许的启动命令: ${scriptBin}，仅支持: ${ALLOWED_COMMANDS.join(', ')}`);
+  }
+
+  // 解析完整路径
   try {
-    scriptBin = execSync(`command -v ${parts[0]}`, { encoding: 'utf8', env: { ...process.env, PATH: buildPath() } }).trim().split('\n')[0];
+    const resolved = execFileSync('which', [scriptBin], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: buildPath() }
+    }).trim().split('\n')[0];
+    if (resolved) scriptBin = resolved;
   } catch {}
 
   logger.info('GitWorker', `Starting pm2 with: ${scriptBin} ${scriptArgs.join(' ')}`);
