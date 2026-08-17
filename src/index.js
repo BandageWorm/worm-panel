@@ -35,8 +35,10 @@ function createApp() {
 
   // Protected routes
   app.use('/api/dashboard', authMiddleware, require('./routes/dashboard'));
+  app.use('/api/firewall', authMiddleware, require('./routes/firewall'));
   app.use('/api/nginx', authMiddleware, require('./routes/nginx'));
   app.use('/api/ssl', authMiddleware, require('./routes/ssl'));
+  app.use('/api/cron', authMiddleware, require('./routes/cron'));
   app.use('/api/notes', authMiddleware, require('./routes/notes'));
   app.use('/api/pm2', authMiddleware, require('./routes/pm2'));
   app.use('/api/xui', authMiddleware, require('./routes/xui'));

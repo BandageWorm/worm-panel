@@ -29,6 +29,10 @@
           <el-icon><Monitor /></el-icon>
           <span>终端</span>
         </el-menu-item>
+        <el-menu-item index="/firewall">
+          <el-icon><Key /></el-icon>
+          <span>防火墙</span>
+        </el-menu-item>
         <el-menu-item index="/nginx">
           <el-icon><Connection /></el-icon>
           <span>Nginx</span>
@@ -36,6 +40,10 @@
         <el-menu-item index="/ssl">
           <el-icon><Lock /></el-icon>
           <span>SSL 证书</span>
+        </el-menu-item>
+        <el-menu-item index="/cron">
+          <el-icon><Timer /></el-icon>
+          <span>计划任务</span>
         </el-menu-item>
         <el-menu-item index="/notes">
           <el-icon><Edit /></el-icon>

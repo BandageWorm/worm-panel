@@ -15,7 +15,7 @@ const DEFAULT_CONFIG = {
 };
 
 function ensureDataDir() {
-  const dirs = [DATA_DIR, path.join(DATA_DIR, 'notes'), path.join(DATA_DIR, 'backups'), path.join(DATA_DIR, 'logs'), path.join(DATA_DIR, 'drive')];
+  const dirs = [DATA_DIR, path.join(DATA_DIR, 'notes'), path.join(DATA_DIR, 'backups'), path.join(DATA_DIR, 'logs'), path.join(DATA_DIR, 'drive'), path.join(DATA_DIR, 'cron-history')];
   for (const d of dirs) {
     if (!fs.existsSync(d)) {
       fs.mkdirSync(d, { recursive: true });
