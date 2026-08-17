@@ -6,3 +6,5 @@ client/dist/
 *.log
 data/ssl
 .kiro
+.env
+.claude

@@ -5,9 +5,23 @@
 #
 set -e
 
-SERVER="root@38.47.114.109"
-REMOTE_DIR="/root/worm-panel"
+SERVER="${DEPLOY_SERVER:-}"
+REMOTE_DIR="${DEPLOY_DIR:-/root/worm-panel}"
 SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# 支持从 .env 文件读取（不纳入版本控制）
+ENV_FILE="$SOURCE_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  SERVER="${DEPLOY_SERVER:-$SERVER}"
+  REMOTE_DIR="${DEPLOY_DIR:-$REMOTE_DIR}"
+fi
+
+if [ -z "$SERVER" ]; then
+  log_error "DEPLOY_SERVER not set. Create .env file with: DEPLOY_SERVER=root@your-server-ip"
+  exit 1
+fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
