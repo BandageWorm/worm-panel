@@ -43,6 +43,7 @@ function createApp() {
   app.use('/api/pm2', authMiddleware, require('./routes/pm2'));
   app.use('/api/xui', authMiddleware, require('./routes/xui'));
   app.use('/api/settings', authMiddleware, require('./routes/settings'));
+  app.use('/api/systemd', authMiddleware, require('./routes/systemd'));
   app.use('/api/files', authMiddleware, require('./routes/files'));
 
   app.use('/api/sync', authMiddleware, require('./routes/sync'));

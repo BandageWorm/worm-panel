@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(curl -s *)",
-      "Bash(dig *)",
-      "Bash(nslookup *)"
-    ]
-  }
-}

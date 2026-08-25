@@ -36,17 +36,9 @@ cd "$SOURCE_DIR"
 
 # ── Collect changed files ──
 
-# Collect modified files with actual content changes
-# -b ignores whitespace (handles CRLF diffs between Windows/WSL)
-# sed removes diff header lines, then check for +/- content lines
-MODIFIED=""
-while IFS= read -r f; do
-  if git diff HEAD -b -- "$f" 2>/dev/null | sed '1,4d' | grep -q '^[+-]'; then
-    MODIFIED="$MODIFIED $f"
-  fi
-done < <(git diff HEAD --name-only --diff-filter=M 2>/dev/null)
-# Trim leading space
-MODIFIED="${MODIFIED# }"
+# Collect modified files - trust git's detection directly
+MODIFIED=$(git diff HEAD --name-only --diff-filter=M 2>/dev/null | tr '\n' ' ')
+MODIFIED="${MODIFIED% }"
 UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
 DELETED=$(git diff HEAD --name-only --diff-filter=D 2>/dev/null || true)
 

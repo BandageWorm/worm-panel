@@ -18,6 +18,7 @@ const routes = [
       { path: 'notes', component: () => import('../views/NotesManager.vue'), meta: { title: '记事本' } },
       { path: 'sync', component: () => import('../views/Sync.vue'), meta: { title: '云备份' } },
       { path: 'pm2', component: () => import('../views/Pm2Manager.vue'), meta: { title: 'PM2 管理' } },
+      { path: 'systemd', component: () => import('../views/SystemdManager.vue'), meta: { title: 'Systemd 管理' } },
       { path: 'xui', component: () => import('../views/XuiManager.vue'), meta: { title: '3X-UI' } },
       { path: 'settings', component: () => import('../views/Settings.vue'), meta: { title: '系统设置' } }
     ]

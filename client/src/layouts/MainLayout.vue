@@ -53,6 +53,10 @@
           <el-icon><Cpu /></el-icon>
           <span>PM2</span>
         </el-menu-item>
+        <el-menu-item index="/systemd">
+          <el-icon><Setting /></el-icon>
+          <span>Systemd</span>
+        </el-menu-item>
         <el-menu-item index="/xui">
           <el-icon><Grid /></el-icon>
           <span>3X-UI</span>
