@@ -55,6 +55,15 @@ function createApp() {
   driveRoute.setSyncDrive(sync.syncDrive, sync.isDriveSyncing);
   app.use('/api/drive', authMiddleware, driveRoute.router);
 
+  // 文件直链 — 管理接口走 JWT
+  const directlinkRoute = require('./routes/directlink');
+  app.use('/api/directlink', authMiddleware, directlinkRoute.router);
+
+  // 文件直链 — 公开下载端点，无需鉴权。必须注册在 SPA fallback 之前，否则会被前端路由拦截
+  // :filename 段仅用于让 wget/curl 等下载器从 URL 推断文件名，实际按 :token 查文件
+  app.get('/d/:token/:filename', directlinkRoute.publicDownload);
+  app.get('/d/:token', directlinkRoute.publicDownload);
+
   // SPA fallback
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api')) {

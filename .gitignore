@@ -5,6 +5,7 @@ client/node_modules/
 client/dist/
 *.log
 data/ssl
+data/directlink/
 .kiro
 .env
 .claude

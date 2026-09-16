@@ -36,13 +36,40 @@ cd "$SOURCE_DIR"
 
 # ── Collect changed files ──
 
-# Collect modified files - trust git's detection directly
-MODIFIED=$(git diff HEAD --name-only --diff-filter=M 2>/dev/null | tr '\n' ' ')
-MODIFIED="${MODIFIED% }"
-UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
-DELETED=$(git diff HEAD --name-only --diff-filter=D 2>/dev/null || true)
+# 用 git status --porcelain 统一收集变更（已修改 + 新增 + 删除 + 重命名）。
+# 相比 `git diff HEAD --diff-filter`，porcelain 在跨挂载盘（WSL /mnt）场景下
+# 对已跟踪文件的"已修改"判定更可靠，不会漏掉仅修改未新增的文件。
+# 输出格式：每行 "XY <path>"（重命名为 "R  orig -> new"），据此拆分状态与路径。
+STATUS=$(git status --porcelain 2>/dev/null || true)
 
-ALL_FILES=$(echo -e "$MODIFIED\n$UNTRACKED" | grep -v '^$' | grep -v 'node_modules' | grep -v '\.git' | grep -v 'public/' | grep -v 'data/' | grep -v '^openspec/' | grep -v '^.claude/' | sort -u || true)
+# 排除的路径前缀（构建产物、依赖、运行时数据、规划文档等）
+EXCLUDE='node_modules|\.git|public/|data/|^openspec/|^\.claude/'
+
+# 需要同步（新增/修改/重命名）的文件：排除已删除项
+CHANGED=$(echo "$STATUS" | awk '
+  {
+    st = substr($0, 1, 2)
+    path = substr($0, 4)
+    # 重命名/复制取箭头后的新路径
+    if (path ~ / -> /) { sub(/^.* -> /, "", path) }
+    # 去除可能的引号（含特殊字符文件名时 git 会加引号）
+    gsub(/^"|"$/, "", path)
+    # 跳过已删除的文件（在 DELETED 中单独处理）
+    if (st ~ /D/) next
+    print path
+  }' | grep -v '^$' | grep -vE "$EXCLUDE" | sort -u || true)
+
+# 已删除的文件：需要在远端一并删除
+DELETED=$(echo "$STATUS" | awk '
+  {
+    st = substr($0, 1, 2)
+    path = substr($0, 4)
+    if (path ~ / -> /) { sub(/^.* -> /, "", path) }
+    gsub(/^"|"$/, "", path)
+    if (st ~ /D/) print path
+  }' | grep -v '^$' | grep -vE "$EXCLUDE" | sort -u || true)
+
+ALL_FILES="$CHANGED"
 
 if [ -z "$ALL_FILES" ]; then
   log_info "No files to sync"

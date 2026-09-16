@@ -10,6 +10,7 @@ const routes = [
     children: [
       { path: 'dashboard', component: () => import('../views/Dashboard.vue') },
       { path: 'files', component: () => import('../views/FileManager.vue'), meta: { title: '文件管理' } },
+      { path: 'directlink', component: () => import('../views/DirectLinkManager.vue'), meta: { title: '文件直链' } },
       { path: 'terminal', component: () => import('../views/TerminalPage.vue'), meta: { title: '终端' } },
       { path: 'firewall', component: () => import('../views/FirewallManager.vue'), meta: { title: '防火墙' } },
       { path: 'nginx', component: () => import('../views/NginxManager.vue'), meta: { title: 'Nginx 管理' } },

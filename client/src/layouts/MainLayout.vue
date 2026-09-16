@@ -25,6 +25,10 @@
           <el-icon><Folder /></el-icon>
           <span>文件管理</span>
         </el-menu-item>
+        <el-menu-item index="/directlink">
+          <el-icon><Link /></el-icon>
+          <span>文件直链</span>
+        </el-menu-item>
         <el-menu-item index="/terminal">
           <el-icon><Monitor /></el-icon>
           <span>终端</span>
