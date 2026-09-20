@@ -9,6 +9,17 @@ SERVER="${DEPLOY_SERVER:-}"
 REMOTE_DIR="${DEPLOY_DIR:-/root/worm-panel}"
 SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
+# 可选参数 --from <ref>：额外同步 <ref> 到 HEAD 之间「已提交」的变更。
+# 默认只同步工作区（未提交）改动，因此把改动提交后再部署会显示 "No files to sync"。
+FROM_REF=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --from)   FROM_REF="${2:-}"; shift 2 ;;
+    --from=*) FROM_REF="${1#*=}"; shift ;;
+    *) echo "未知参数: $1" >&2; exit 2 ;;
+  esac
+done
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
@@ -46,6 +57,23 @@ cd "$SOURCE_DIR"
 # 这里用 -c 做一次性覆盖（不写入仓库或全局 git 配置），保证两端变更集一致。
 STATUS=$(git -c core.autocrlf=true status --porcelain 2>/dev/null || true)
 
+# 可选：把 --from <ref> 到 HEAD 之间「已提交」的变更也并入待同步集合，
+# 统一归一化成与 `git status --porcelain` 相同的 "XY path" 形式（重命名拆为删旧+增新）。
+if [ -n "$FROM_REF" ]; then
+  if ! git rev-parse --verify --quiet "$FROM_REF^{commit}" >/dev/null; then
+    log_error "--from 指定的 ref 无效: $FROM_REF"
+    exit 1
+  fi
+  COMMITTED=$(git diff --name-status "$FROM_REF" HEAD 2>/dev/null | awk -F'\t' '
+    NF < 2 { next }
+    {
+      s = $1
+      if (s ~ /^[RC]/) { print "DD " $2; print "MM " $3 }
+      else { c = substr(s, 1, 1); print c c " " $2 }
+    }' || true)
+  STATUS=$(printf '%s\n%s\n' "$STATUS" "$COMMITTED")
+fi
+
 # 排除的路径前缀（构建产物、依赖、运行时数据、规划文档、开发期工具链等）
 # 注意：test/、CI 工作流与 lint/format 配置只在开发与 CI 使用，不推送到生产服务器
 EXCLUDE='node_modules|\.git|public/|data/|^openspec/|^\.claude/|^test/|^\.github/|^vitest\.config\.js|^eslint\.config\.js|^\.prettierrc|^\.prettierignore'
@@ -77,8 +105,8 @@ DELETED=$(echo "$STATUS" | awk '
 ALL_FILES="$CHANGED"
 
 if [ -z "$ALL_FILES" ]; then
-  log_info "No files to sync"
-  exit 0
+  log_info "No files to sync（工作区无改动；若变更已提交，请加 --from <ref> 指定基线提交）"
+  exit 3
 fi
 
 echo ""

@@ -6,7 +6,7 @@
 
 ### Requirement: 从 GitHub 部署 Worker
 
-系统应支持通过 PM2 页面输入 GitHub 仓库地址，自动 clone 并使用 miniflare 在本地运行 Worker 项目。
+系统 SHALL 支持通过 PM2 页面输入 GitHub 仓库地址，自动 clone 并使用 miniflare 在本地运行 Worker 项目。
 
 #### Scenario: 部署 Worker 项目
 - **WHEN** 用户在 PM2 页面点击"从 GitHub 部署 Worker"，填写仓库地址、项目名称、入口文件、分支和端口

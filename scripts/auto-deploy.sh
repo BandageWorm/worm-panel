@@ -30,6 +30,7 @@ Worm Panel 一键自动部署（项目约定：通过 WSL 运行）
   bash scripts/auto-deploy.sh --dry-run              仅列出将同步的文件，不推送
   bash scripts/auto-deploy.sh --verify-only          仅做部署后自检
   bash scripts/auto-deploy.sh --skip-verify          跳过部署后自检
+  bash scripts/auto-deploy.sh --from <ref>           额外同步 <ref> 到 HEAD 之间已提交的变更
   bash scripts/auto-deploy.sh --verify-heavy         自检时实际调用 pm2.reloadAll（会重启 PM2 进程）
   bash scripts/auto-deploy.sh --allow-non-wsl        允许非 WSL 环境运行（不推荐）
   bash scripts/auto-deploy.sh --install-dir /opt/worm-panel
@@ -46,17 +47,21 @@ USAGE
 ARG_SERVER=""
 ARG_DIR=""
 ARG_INSTALL_DIR=""
+ARG_FROM=""
 DRY_RUN=0
 VERIFY_ONLY=0
 SKIP_VERIFY=0
 VERIFY_HEAVY=0
 ALLOW_NON_WSL=0
+NO_SYNC=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --server)        ARG_SERVER="${2:-}"; shift 2 ;;
     --dir)           ARG_DIR="${2:-}"; shift 2 ;;
     --install-dir)   ARG_INSTALL_DIR="${2:-}"; shift 2 ;;
+    --from)          ARG_FROM="${2:-}"; shift 2 ;;
+    --from=*)        ARG_FROM="${1#*=}"; shift ;;
     --dry-run)       DRY_RUN=1; shift ;;
     --verify-only)   VERIFY_ONLY=1; shift ;;
     --skip-verify)   SKIP_VERIFY=1; shift ;;
@@ -297,18 +302,34 @@ REMOTE_NODE
 
 # ── 6. 执行 ──
 
+SYNC_ARGS=()
+if [ -n "$ARG_FROM" ]; then
+  SYNC_ARGS=(--from "$ARG_FROM")
+fi
+
 if [ "$VERIFY_ONLY" -eq 1 ]; then
   log_info "仅执行部署后自检（--verify-only）"
 elif [ "$DRY_RUN" -eq 1 ]; then
   # 复用 sync-and-deploy.sh 的变更检测与排除规则，避免两处逻辑分叉
   log_info "DRY RUN：仅列出将同步的变更文件，不推送"
   echo ""
-  DRY_RUN=1 bash "$SYNC_SCRIPT"
+  DRY_RUN=1 bash "$SYNC_SCRIPT" ${SYNC_ARGS[@]+"${SYNC_ARGS[@]}"}
   exit 0
 else
   log_info "开始增量同步并触发远端构建与重启..."
   echo ""
-  bash "$SYNC_SCRIPT"
+  # sync-and-deploy.sh 以退出码 3 表示「没有可同步的文件」，
+  # 此时远端不会构建/重启，据此外置提醒，避免把「旧版本自检通过」误报为部署成功。
+  set +e
+  bash "$SYNC_SCRIPT" ${SYNC_ARGS[@]+"${SYNC_ARGS[@]}"}
+  SYNC_RC=$?
+  set -e
+  if [ "$SYNC_RC" -eq 3 ]; then
+    NO_SYNC=1
+  elif [ "$SYNC_RC" -ne 0 ]; then
+    log_error "同步失败（退出码 $SYNC_RC）"
+    exit "$SYNC_RC"
+  fi
 fi
 
 # ── 7. 自检 ──
@@ -319,11 +340,23 @@ if [ "$SKIP_VERIFY" -eq 1 ]; then
   exit 0
 fi
 
+if [ "$NO_SYNC" -eq 1 ]; then
+  log_warn "本次没有文件同步到服务器，未触发远端构建/重启；以下自检针对服务器上「当前正在运行」的版本。"
+fi
+
 if verify_deployed; then
   echo ""
-  log_ok "部署完成，自检全部通过"
+  if [ "$NO_SYNC" -eq 1 ]; then
+    log_warn "自检通过，但本次并未部署任何变更（如需部署已提交的改动，请加 --from <ref>）"
+  else
+    log_ok "部署完成，自检全部通过"
+  fi
 else
   echo ""
-  log_error "部署已执行，但自检未全部通过，请检查上方输出"
+  if [ "$NO_SYNC" -eq 1 ]; then
+    log_error "自检未通过；且本次并未部署任何变更，失败项来自服务器当前运行的版本"
+  else
+    log_error "部署已执行，但自检未全部通过，请检查上方输出"
+  fi
   exit 1
 fi
