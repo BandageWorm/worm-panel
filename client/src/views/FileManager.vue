@@ -15,7 +15,7 @@ import FileBrowser from '../components/FileBrowser.vue'
 
 <style scoped>
 .file-manager {
-  max-width: 1200px;
+  width: 100%;
 }
 .card-title {
   display: flex;

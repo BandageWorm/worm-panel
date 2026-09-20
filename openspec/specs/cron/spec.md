@@ -1,3 +1,9 @@
+## Purpose
+
+在面板中提供计划任务（crontab）的可视化管理能力，支持查看、创建、编辑与启停 cron 任务。
+
+## Requirements
+
 ### Requirement: 查看计划任务列表
 系统 SHALL 提供 API 返回所有 crontab 任务，区分面板管理的任务和用户手动添加的任务。
 
