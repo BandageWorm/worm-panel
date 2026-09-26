@@ -102,6 +102,8 @@
 </template>
 
 <script setup>
+
+import { formatBytes } from '../composables/useFormat'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { get } from '../api'
 
@@ -123,13 +125,6 @@ const modeLabel = computed(() => {
     ? `反代模式 :${info.value.panel.port}`
     : `独立模式 :${info.value.panel.port}`
 })
-
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i]
-}
 
 function formatSpeed(bytesPerSec) {
   if (!bytesPerSec || bytesPerSec === 0) return '0 B'

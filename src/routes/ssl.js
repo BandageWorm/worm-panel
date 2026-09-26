@@ -5,8 +5,10 @@ const logger = require('../utils/logger');
 
 const router = Router();
 
-router.get('/status', (req, res) => {
-  res.json({ installed: acme.checkInstalled() });
+router.get('/status', async (req, res) => {
+  const installed = acme.checkInstalled();
+  const version = installed ? await acme.getVersion() : null;
+  res.json({ installed, version });
 });
 
 router.post('/install', async (req, res) => {
@@ -64,7 +66,7 @@ router.delete('/cert/:domain', async (req, res) => {
     res.json(result);
   } catch (e) {
     logger.error('SSL', `删除证书 ${req.params.domain} 失败`, e);
-    res.status(500).json({ error: e.message });
+    res.status(e.status || 500).json({ error: e.message });
   }
 });
 

@@ -97,6 +97,33 @@ async function reload(name) {
   disconnect();
 }
 
+async function reloadAll() {
+  await connect();
+  const client = bindClient();
+
+  let names = [];
+  try {
+    const processes = await client.list();
+    names = processes.map(p => p.name);
+  } catch {
+    names = [];
+  }
+
+  // 无进程时为空操作
+  const reloaded = [];
+  for (const name of names) {
+    try {
+      await client.reload(name);
+      reloaded.push(name);
+    } catch {
+      // 单个进程 reload 失败不影响其余进程
+    }
+  }
+
+  disconnect();
+  return reloaded;
+}
+
 async function start(name) {
   await connect();
   const client = bindClient();
@@ -234,4 +261,4 @@ function saveConfig(content) {
   return configPath;
 }
 
-module.exports = { list, restart, stop, reload, start, describe, updateProcess, removeProcess, getLogs, clearLogs, getConfig, saveConfig };
+module.exports = { list, restart, stop, reload, reloadAll, start, describe, updateProcess, removeProcess, getLogs, clearLogs, getConfig, saveConfig };

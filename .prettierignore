@@ -1,0 +1,13 @@
+# 不参与格式化的路径
+node_modules
+public
+client
+data
+openspec
+.codebuddy
+package-lock.json
+client/package-lock.json
+
+# 文档与脚本不做全量重排
+*.md
+scripts/

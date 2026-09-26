@@ -47,7 +47,7 @@
       </el-table-column>
       <el-table-column prop="size" label="大小" width="80" sortable="custom">
         <template #default="{ row }">
-          <span v-if="row.type === 'file'">{{ formatSize(row.size) }}</span>
+          <span v-if="row.type === 'file'">{{ formatBytes(row.size) }}</span>
           <span v-else style="color:#909399">--</span>
         </template>
       </el-table-column>
@@ -140,6 +140,9 @@
 </template>
 
 <script setup>
+
+import { formatBytes, formatTime } from '../composables/useFormat'
+import { useAsyncData } from '../composables/useAsyncData'
 import { ref, computed, shallowRef, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, FolderAdd, Refresh, Folder, Document, UploadFilled, EditPen, Download, Delete, CopyDocument } from '@element-plus/icons-vue'
@@ -204,8 +207,11 @@ function getLanguageExt(filename) {
   return EDITABLE_EXTENSIONS[ext] || null
 }
 
-const loading = ref(false)
-const files = ref([])
+// 列表加载收敛到 useAsyncData：loading + 失败提示 + 复位
+const { loading, data: files, load: fetchFiles } = useAsyncData(
+  () => get(`/files?path=${encodeURIComponent(currentPath.value)}`),
+  { initial: [] }
+)
 const currentPath = ref('/')
 
 // Upload
@@ -273,29 +279,7 @@ const uploadHeaders = computed(() => {
 
 const uploadData = computed(() => ({}))
 
-function formatSize(bytes) {
-  if (!bytes || bytes === 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i]
-}
 
-function formatTime(iso) {
-  if (!iso) return '--'
-  const d = new Date(iso)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-async function fetchFiles() {
-  loading.value = true
-  try {
-    files.value = await get(`/files?path=${encodeURIComponent(currentPath.value)}`)
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-  loading.value = false
-}
 
 function navigateTo(path) {
   currentPath.value = path

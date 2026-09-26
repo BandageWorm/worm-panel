@@ -42,6 +42,21 @@ function checkInstalled() {
   return fs.existsSync(ACME_BIN);
 }
 
+async function getVersion() {
+  if (!checkInstalled()) return null;
+  try {
+    const { stdout, stderr } = await execFileAsync(ACME_BIN, ['--version'], {
+      encoding: 'utf8',
+      timeout: 10000
+    });
+    const out = `${stdout || ''}\n${stderr || ''}`;
+    const match = out.match(/v?\d+\.\d+\.\d+/);
+    return match ? match[0] : (out.trim() || null);
+  } catch (e) {
+    return null;
+  }
+}
+
 async function install() {
   if (checkInstalled()) {
     return { success: true, message: 'acme.sh 已安装' };
@@ -203,7 +218,9 @@ async function deleteCert(domain) {
   });
 
   if (items.length === 0) {
-    throw new Error(`证书 ${domain} 未找到`);
+    const err = new Error(`证书 ${domain} 未找到`);
+    err.status = 404;
+    throw err;
   }
 
   // Remove via acme.sh first
@@ -286,5 +303,5 @@ server {
 }
 
 module.exports = {
-  checkInstalled, install, listCerts, issueCert, renewCert, renewAllCerts, deleteCert, getCertInfo, applyToNginx
+  checkInstalled, getVersion, install, listCerts, issueCert, renewCert, renewAllCerts, deleteCert, getCertInfo, applyToNginx
 };

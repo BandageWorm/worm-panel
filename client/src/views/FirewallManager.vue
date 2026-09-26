@@ -90,7 +90,7 @@
       </el-card>
 
       <!-- Add Rule Dialog -->
-      <el-dialog v-model="showAddDialog" title="添加防火墙规则" width="460px">
+      <el-dialog v-model="showAddDialog" title="添加防火墙规则" :width="isMobile ? '92%' : '460px'">
         <el-form :model="addForm" label-width="70px">
           <el-form-item label="端口">
             <el-input v-model="addForm.port" placeholder="如 80、443 或 8000:8100" />
@@ -265,5 +265,18 @@ async function handleDelete(row) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* 手机端适配：规则表格允许横向滚动，避免撑破容器 */
+@media (max-width: 768px) {
+  :deep(.el-card__body) {
+    padding: 12px;
+  }
+  :deep(.el-table) {
+    width: 100%;
+  }
+  :deep(.el-table__body-wrapper) {
+    overflow-x: auto;
+  }
 }
 </style>

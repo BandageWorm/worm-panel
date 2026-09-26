@@ -9,6 +9,15 @@ SERVER="${DEPLOY_SERVER:-}"
 REMOTE_DIR="${DEPLOY_DIR:-/root/worm-panel}"
 SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+log_info()  { echo -e "${CYAN}[INFO]${NC}  $1"; }
+log_ok()    { echo -e "${GREEN}[OK]${NC}    $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
 # 支持从 .env 文件读取（不纳入版本控制）
 ENV_FILE="$SOURCE_DIR/.env"
 if [ -f "$ENV_FILE" ]; then
@@ -23,15 +32,6 @@ if [ -z "$SERVER" ]; then
   exit 1
 fi
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-log_info()  { echo -e "${CYAN}[INFO]${NC}  $1"; }
-log_ok()    { echo -e "${GREEN}[OK]${NC}    $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-
 cd "$SOURCE_DIR"
 
 # ── Collect changed files ──
@@ -40,10 +40,15 @@ cd "$SOURCE_DIR"
 # 相比 `git diff HEAD --diff-filter`，porcelain 在跨挂载盘（WSL /mnt）场景下
 # 对已跟踪文件的"已修改"判定更可靠，不会漏掉仅修改未新增的文件。
 # 输出格式：每行 "XY <path>"（重命名为 "R  orig -> new"），据此拆分状态与路径。
-STATUS=$(git status --porcelain 2>/dev/null || true)
+#
+# 注意 core.autocrlf：Windows 侧通常为 true（检出为 CRLF），WSL 侧默认未设置，
+# 会把所有 CRLF 文本文件误判为"已修改"，进而把整份工作区推上服务器。
+# 这里用 -c 做一次性覆盖（不写入仓库或全局 git 配置），保证两端变更集一致。
+STATUS=$(git -c core.autocrlf=true status --porcelain 2>/dev/null || true)
 
-# 排除的路径前缀（构建产物、依赖、运行时数据、规划文档等）
-EXCLUDE='node_modules|\.git|public/|data/|^openspec/|^\.claude/'
+# 排除的路径前缀（构建产物、依赖、运行时数据、规划文档、开发期工具链等）
+# 注意：test/、CI 工作流与 lint/format 配置只在开发与 CI 使用，不推送到生产服务器
+EXCLUDE='node_modules|\.git|public/|data/|^openspec/|^\.claude/|^test/|^\.github/|^vitest\.config\.js|^eslint\.config\.js|^\.prettierrc|^\.prettierignore'
 
 # 需要同步（新增/修改/重命名）的文件：排除已删除项
 CHANGED=$(echo "$STATUS" | awk '
@@ -79,6 +84,12 @@ fi
 echo ""
 log_info "Files to sync ($(echo "$ALL_FILES" | wc -l) files):"
 echo "$ALL_FILES" | sed 's/^/  /'
+
+# DRY_RUN=1 时只列出变更，不做任何远端操作
+if [ "${DRY_RUN:-0}" = "1" ]; then
+  log_info "DRY RUN：仅列出变更文件，不推送"
+  exit 0
+fi
 
 # ── Create remote directories for new files ──
 

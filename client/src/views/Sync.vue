@@ -12,6 +12,14 @@
         </template>
         <div class="status-grid">
           <div class="status-item">
+            <span class="label">服务商</span>
+            <span class="value">{{ providerLabel }}</span>
+          </div>
+          <div class="status-item">
+            <span class="label">账号</span>
+            <span class="value">{{ info.webdavUser || '未设置' }}</span>
+          </div>
+          <div class="status-item">
             <span class="label">WebDAV 地址</span>
             <span class="value mono">{{ info.webdavUrl }}</span>
           </div>
@@ -311,12 +319,35 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Timer, WarningFilled, Link, CopyDocument, FolderOpened, Document, Download, Delete, EditPen, Plus } from '@element-plus/icons-vue'
 import { get, post } from '../api'
 import { useMobile } from '../composables/useMobile'
+import { formatBytes as formatBytesBase, formatTime as formatTimeBase } from '../composables/useFormat'
+
+// 该页历史上：空字节显示 '--'、空时间显示 '从未'、时间用本地化格式，均保持原有行为
+const formatBytes = (bytes) => formatBytesBase(bytes, { empty: '--' })
+const formatTime = (iso) => formatTimeBase(iso, { empty: '从未', locale: true })
 
 const { isMobile } = useMobile()
 
 const installed = ref(true)
 const connected = ref(false)
 const info = ref({})
+
+// 连接服务商：面板默认走本机 aliyundrive-webdav 代理，故回环/未指定/内网地址视为阿里云盘；
+// 同时识别已知公网 WebDAV 品牌，其余归为通用 WebDAV
+function isLocalWebdav(url) {
+  if (url.includes('localhost') || url.includes('0.0.0.0') || url.includes('::1')) return true
+  return /(\/\/|^|@)(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(url)
+}
+
+const providerLabel = computed(() => {
+  const url = (info.value.webdavUrl || '').toLowerCase()
+  if (!url) return '--'
+  if (url.includes('aliyun') || url.includes('aliyundrive') || isLocalWebdav(url)) {
+    return '阿里云盘（WebDAV）'
+  }
+  if (url.includes('jianguoyun') || url.includes('nutstore')) return '坚果云（WebDAV）'
+  if (url.includes('nextcloud')) return 'Nextcloud（WebDAV）'
+  return 'WebDAV'
+})
 const history = ref([])
 const backingUp = ref(false)
 const restoring = ref(false)
@@ -446,22 +477,6 @@ function copyCmd(text) {
   navigator.clipboard.writeText(text)
     .then(() => ElMessage.success('已复制'))
     .catch(() => ElMessage.error('复制失败'))
-}
-
-function formatBytes(bytes) {
-  if (bytes === null || bytes === undefined || bytes === 0) return '--'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i]
-}
-
-function formatTime(iso) {
-  if (!iso) return '从未'
-  try {
-    return new Date(iso).toLocaleString('zh-CN', { hour12: false })
-  } catch {
-    return iso
-  }
 }
 
 // ── Drive functions ──
@@ -626,7 +641,7 @@ onMounted(() => {
 }
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   margin-bottom: 20px;
 }

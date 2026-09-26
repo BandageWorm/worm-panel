@@ -6,6 +6,8 @@ client/dist/
 *.log
 data/ssl
 data/directlink/
+data/cron-history/
 .kiro
 .env
 .claude
+.codebuddy

@@ -106,6 +106,14 @@ function mkdir(dirPath) {
   return { success: true };
 }
 
+function decodeUtf8(buffer) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch {
+    throw new Error('不支持的文件编码');
+  }
+}
+
 function readFile(filePath) {
   const resolved = safeResolve(filePath);
 
@@ -122,7 +130,7 @@ function readFile(filePath) {
     throw new Error('文件过大无法编辑（超过 1MB）');
   }
 
-  const content = fs.readFileSync(resolved, 'utf-8');
+  const content = decodeUtf8(fs.readFileSync(resolved));
   return { content };
 }
 

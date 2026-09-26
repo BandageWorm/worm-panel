@@ -1,14 +1,19 @@
 const { Router } = require('express');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const multer = require('multer');
 const files = require('../services/files');
+const { sanitizeFilename, assertInside } = require('../utils/paths');
 const logger = require('../utils/logger');
 
 const router = Router();
 
 // Multer config: store in temp then move
-const upload = multer({ dest: '/tmp/worm-upload/' });
+// 使用面板私有临时目录，避免固定路径带来的权限/并发冲突
+const UPLOAD_TMP_DIR = path.join(os.tmpdir(), 'worm-panel-upload');
+fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
+const upload = multer({ dest: UPLOAD_TMP_DIR, preservePath: true });
 
 // List directory
 router.get('/', (req, res) => {
@@ -44,7 +49,6 @@ router.post('/upload', upload.single('file'), (req, res) => {
     }
 
     const targetDir = path.resolve(destDir);
-    const targetPath = path.join(targetDir, req.file.originalname);
 
     // Ensure targetDir starts with /
     if (!targetDir.startsWith('/')) {
@@ -53,10 +57,18 @@ router.post('/upload', upload.single('file'), (req, res) => {
       return res.status(400).json({ error: '只允许绝对路径' });
     }
 
+    if (!fs.existsSync(targetDir)) {
+      throw new Error('目标目录不存在');
+    }
+
+    // 净化文件名，并确认最终路径未逃逸目标目录
+    const safeName = sanitizeFilename(req.file.originalname);
+    const targetPath = assertInside(targetDir, path.join(targetDir, safeName));
+
     // Move file from temp location
     fs.renameSync(req.file.path, targetPath);
 
-    res.json({ success: true, name: req.file.originalname, path: targetPath });
+    res.json({ success: true, name: safeName, path: targetPath });
   } catch (e) {
     // Clean up temp file if exists
     if (req.file && req.file.path && fs.existsSync(req.file.path)) {

@@ -1,0 +1,5 @@
+# Shell 脚本必须使用 LF 行尾：
+# CRLF 会让 WSL / Linux 的 bash 报 "syntax error near unexpected token"，
+# 也会导致通过 scp 推送到服务器后在远端执行失败。
+# 本项目约定 shell 脚本通过 WSL 运行，故在此固定为 LF，不受 core.autocrlf 影响。
+*.sh text eol=lf

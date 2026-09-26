@@ -1,5 +1,4 @@
 const { Router } = require('express');
-const { execSync } = require('child_process');
 const config = require('../services/config');
 const nginx = require('../services/nginx');
 const { hashPassword } = require('../utils/crypto');
@@ -43,8 +42,7 @@ router.put('/', async (req, res) => {
         return res.status(400).json({ error: '模式必须是 standalone 或 proxy' });
       }
       if (mode === 'proxy' && !domain && !cfg.domain) {
-        // If switching to proxy but no domain provided and none currently set
-        // We'll let it pass and be handled by the domain check below
+        return res.status(400).json({ error: '切换到 proxy 模式需要提供域名' });
       }
       cfg.mode = mode;
       changes.push('mode');

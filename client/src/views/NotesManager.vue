@@ -68,6 +68,11 @@
 </template>
 
 <script setup>
+
+import { formatTime as formatTimeBase } from '../composables/useFormat'
+
+// 该页历史上空时间显示为空字符串，保持原有显示行为
+const formatTime = (iso) => formatTimeBase(iso, { empty: '' })
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MarkdownIt from 'markdown-it'
@@ -149,13 +154,6 @@ async function handleDelete() {
     editorContent.value = ''
     await fetchNotes()
   } catch {}
-}
-
-function formatTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function handleExport() {

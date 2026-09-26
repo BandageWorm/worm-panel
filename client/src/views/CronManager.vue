@@ -58,7 +58,7 @@
       </el-card>
 
       <!-- Add/Edit Dialog -->
-      <el-dialog v-model="showDialog" :title="editingJob ? '编辑任务' : '添加任务'" width="560px">
+      <el-dialog v-model="showDialog" :title="editingJob ? '编辑任务' : '添加任务'" :width="isMobile ? '92%' : '560px'">
         <el-form :model="form" label-width="80px">
           <el-form-item label="任务名称">
             <el-input v-model="form.name" placeholder="如：清理日志" />
@@ -118,7 +118,7 @@
       </el-dialog>
 
       <!-- History Dialog -->
-      <el-dialog v-model="showHistory" :title="`执行历史 - ${historyJob?.name || ''}`" width="650px">
+      <el-dialog v-model="showHistory" :title="`执行历史 - ${historyJob?.name || ''}`" :width="isMobile ? '94%' : '650px'">
         <el-table :data="history" stripe size="small" v-loading="historyLoading" max-height="400">
           <el-table-column label="时间" width="170">
             <template #default="{ row }">{{ formatTime(row.time) }}</template>
@@ -163,10 +163,19 @@ import { ref, onMounted } from 'vue'
 import { get, post, put, del } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useMobile } from '../composables/useMobile'
+import { formatTime as formatTimeBase } from '../composables/useFormat'
+import { useAsyncData } from '../composables/useAsyncData'
+
+// 该页历史上使用本地化时间格式，保持原有显示行为
+const formatTime = (iso) => formatTimeBase(iso, { locale: true })
 
 const { isMobile } = useMobile()
-const loading = ref(true)
-const jobs = ref([])
+
+// 列表加载收敛到 useAsyncData：loading + 失败提示 + 复位
+const { loading, data: jobs, load: loadJobs } = useAsyncData(
+  () => get('/cron/jobs'),
+  { errorPrefix: '加载任务列表失败', initial: [] }
+)
 const running = ref(null)
 const saving = ref(false)
 
@@ -204,16 +213,7 @@ onMounted(async () => {
   await loadJobs()
 })
 
-async function loadJobs() {
-  loading.value = true
-  try {
-    jobs.value = await get('/cron/jobs')
-  } catch (e) {
-    ElMessage.error('加载任务列表失败: ' + e.message)
-  } finally {
-    loading.value = false
-  }
-}
+
 
 function updateSchedule() {
   switch (quickType.value) {
@@ -333,12 +333,6 @@ async function openHistory(job) {
   }
 }
 
-function formatTime(iso) {
-  if (!iso) return '--'
-  const d = new Date(iso)
-  return d.toLocaleString('zh-CN', { hour12: false })
-}
-
 function formatDuration(ms) {
   if (!ms && ms !== 0) return '--'
   if (ms < 1000) return ms + 'ms'
@@ -407,5 +401,27 @@ function formatDuration(ms) {
 }
 .output-box pre.stderr {
   color: #f56c6c;
+}
+/* 手机端适配：表格横向滚动、长文本换行，避免撑破容器 */
+@media (max-width: 768px) {
+  :deep(.el-card__body) {
+    padding: 12px;
+  }
+  :deep(.el-table) {
+    width: 100%;
+  }
+  :deep(.el-table__body-wrapper) {
+    overflow-x: auto;
+  }
+  .cron-schedule {
+    word-break: break-all;
+  }
+  .schedule-preview {
+    word-break: break-all;
+  }
+  .output-box pre {
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
 }
 </style>

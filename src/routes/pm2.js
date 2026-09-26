@@ -130,14 +130,25 @@ router.get('/config', (req, res) => {
   }
 });
 
-router.put('/config', (req, res) => {
+router.put('/config', async (req, res) => {
   try {
     const { content } = req.body;
     if (content === undefined) {
       return res.status(400).json({ error: '配置内容不能为空' });
     }
-    pm2.saveConfig(content);
-    res.json({ success: true });
+    const configPath = pm2.saveConfig(content);
+
+    // 保存后自动 reload 所有 PM2 进程；无进程时为空操作
+    let reloaded = [];
+    let reloadError = null;
+    try {
+      reloaded = await pm2.reloadAll();
+    } catch (e) {
+      reloadError = e.message;
+      logger.warn('PM2', `配置已保存，但自动 reload 失败: ${e.message}`);
+    }
+
+    res.json({ success: true, configPath, reloaded, reloadError });
   } catch (e) {
     logger.error('PM2', '保存配置失败', e);
     res.status(500).json({ error: e.message });

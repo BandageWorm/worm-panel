@@ -24,7 +24,7 @@
             </template>
           </el-table-column>
           <el-table-column prop="size" label="大小" width="90">
-            <template #default="{ row }">{{ formatSize(row.size) }}</template>
+            <template #default="{ row }">{{ formatBytes(row.size) }}</template>
           </el-table-column>
           <el-table-column label="创建时间" width="150">
             <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
@@ -104,33 +104,22 @@
 </template>
 
 <script setup>
+
+import { formatBytes, formatTime } from '../composables/useFormat'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Link, UploadFilled, Refresh, Document, CopyDocument, Download, Delete } from '@element-plus/icons-vue'
 import { listDirectLinks, uploadDirectLink, deleteDirectLink } from '../api'
+import { useAsyncData } from '../composables/useAsyncData'
 
-const loading = ref(false)
-const items = ref([])
+// 列表加载收敛到 useAsyncData：loading + 失败提示 + 复位
+const { loading, data: items, load: fetchList } = useAsyncData(() => listDirectLinks(), { initial: [] })
 
 const showUpload = ref(false)
 const uploading = ref(false)
 const selectedFile = ref(null)
 const fileList = ref([])
 const expiresAt = ref(null)
-
-function formatSize(bytes) {
-  if (!bytes || bytes === 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i]
-}
-
-function formatTime(iso) {
-  if (!iso) return '--'
-  const d = new Date(iso)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 function isExpired(row) {
   return row.expiresAt && new Date(row.expiresAt).getTime() <= Date.now()
@@ -140,15 +129,7 @@ function disabledDate(date) {
   return date.getTime() < Date.now() - 24 * 60 * 60 * 1000
 }
 
-async function fetchList() {
-  loading.value = true
-  try {
-    items.value = await listDirectLinks()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-  loading.value = false
-}
+
 
 function handleFileChange(file) {
   selectedFile.value = file.raw

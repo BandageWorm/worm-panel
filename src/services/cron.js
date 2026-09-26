@@ -1,11 +1,13 @@
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const HISTORY_DIR = path.join(DATA_DIR, 'cron-history');
@@ -62,16 +64,32 @@ async function readCrontab() {
 }
 
 // 写入 crontab 内容
+//
+// 不经过 shell：先把完整内容写入临时文件，再交给 crontab 程序读取。
+// 这样任务命令中的反引号、$()、;、换行等元字符在写入阶段不会被解释或执行。
 async function writeCrontab(content) {
+  const tmpFile = path.join(
+    os.tmpdir(),
+    `worm-crontab-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
+  );
+
   try {
-    await execAsync(`echo "${content.replace(/"/g, '\\"')}" | crontab -`, {
+    // crontab 文件要求以换行结尾
+    const data = content === '' ? '' : (content.endsWith('\n') ? content : content + '\n');
+    fs.writeFileSync(tmpFile, data, { encoding: 'utf8', mode: 0o600 });
+
+    await execFileAsync('crontab', [tmpFile], {
       encoding: 'utf8',
-      timeout: 10000,
-      shell: '/bin/bash'
+      timeout: 10000
     });
   } catch (e) {
     logger.error('Cron', '写入 crontab 失败', e);
-    throw new Error('写入 crontab 失败: ' + e.message);
+    throw new Error('写入 crontab 失败: ' + (e.stderr || e.message || ''));
+  } finally {
+    // 失败路径同样清理，避免残留
+    try {
+      fs.unlinkSync(tmpFile);
+    } catch {}
   }
 }
 
@@ -371,5 +389,9 @@ module.exports = {
   deleteJob,
   runJob,
   getHistory,
-  ensureHistoryDir
+  ensureHistoryDir,
+  // 以下为纯函数/无副作用函数，导出以便单元测试覆盖
+  parseCrontab,
+  parseCronLine,
+  appendHistory
 };

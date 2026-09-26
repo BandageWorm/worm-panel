@@ -162,6 +162,10 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post, put, del } from '../api'
 import { useMobile } from '../composables/useMobile'
+import { formatBytes as formatBytesBase, BYTE_UNITS_NO_TB } from '../composables/useFormat'
+
+// 该页历史上字节单位只到 GB，保持原有显示行为
+const formatBytes = (bytes) => formatBytesBase(bytes, { units: BYTE_UNITS_NO_TB })
 
 const { isMobile } = useMobile()
 
@@ -401,13 +405,6 @@ async function saveConfig() {
     ElMessage.error(e.message)
   }
   savingConfig.value = false
-}
-
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i]
 }
 
 function formatUptime(seconds) {

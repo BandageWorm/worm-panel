@@ -3,6 +3,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const multer = require('multer');
+const { sanitizeFilename, assertInside } = require('../utils/paths');
 const logger = require('../utils/logger');
 
 const router = Router();
@@ -20,7 +21,13 @@ const storage = multer.diskStorage({
     cb(null, targetDir);
   },
   filename: (req, file, cb) => {
-    let name = file.originalname;
+    let name;
+    try {
+      name = sanitizeFilename(file.originalname);
+    } catch (e) {
+      // 文件名非法时中止上传，路由层返回 400 且不触发 WebDAV 同步
+      return cb(e);
+    }
     const dest = resolveSafePath(req.body.path || '/');
     if (dest && fs.existsSync(path.join(dest, name))) {
       const ext = path.extname(name);
@@ -33,7 +40,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: MAX_FILE_SIZE }
+  limits: { fileSize: MAX_FILE_SIZE },
+  // 保留原始文件名（含路径）以便由 sanitizeFilename 显式校验，
+  // 而不是依赖上游默认的静默 basename
+  preservePath: true
 });
 
 // ── Path safety ──
@@ -187,12 +197,19 @@ router.put('/rename', async (req, res) => {
     const { path: relPath, newName } = req.body;
     if (!relPath || !newName) return res.status(400).json({ error: 'path 和 newName 不能为空' });
 
+    let safeName;
+    try {
+      safeName = sanitizeFilename(newName);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+
     const target = resolveSafePath(relPath);
     if (!target) return res.status(400).json({ error: 'Invalid path' });
     if (!fs.existsSync(target)) return res.status(404).json({ error: '文件或目录不存在' });
 
     const parentDir = path.dirname(target);
-    const newPath = path.join(parentDir, newName);
+    const newPath = assertInside(DRIVE_DIR, path.join(parentDir, safeName));
 
     if (fs.existsSync(newPath)) {
       return res.status(409).json({ error: '同名文件或文件夹已存在' });
@@ -205,7 +222,7 @@ router.put('/rename', async (req, res) => {
     res.json({
       success: true,
       entry: {
-        name: newName,
+        name: safeName,
         type: stat.isDirectory() ? 'dir' : 'file',
         size: stat.isDirectory() ? 0 : stat.size,
         mtime: stat.mtime.toISOString()

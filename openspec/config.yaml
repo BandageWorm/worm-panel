@@ -14,8 +14,11 @@ context: |
   Key modules:
     - Nginx 管理: 可视化添加反代 + 文本编辑器，操作自动备份，面板自身配置锁定
     - PM2 管理: 进程列表、重启/停止、配置编辑、日志
+    - Systemd 管理: 服务列表、启停、开机自启、日志
     - SSL 证书: acme.sh 一键申请
-    - Workers 部署: GitHub clone → npx wrangler deploy
+    - 计划任务: crontab 可视化，支持立即执行与历史
+    - 文件管理 / 文件直链 / 终端 / 防火墙
+    - 云备份: 阿里云盘 WebDAV 备份 + 本地备份盘
     - 记事本: Markdown，文件系统存储
     - 3X-UI: 状态查看 + 反代入口
     - 系统设置: 域名、端口、密码修改

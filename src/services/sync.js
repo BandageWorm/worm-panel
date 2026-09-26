@@ -269,6 +269,7 @@ async function getStatus() {
     provider: sync.provider || null,
     connected: !!sync.webdavUrl,
     webdavUrl: sync.webdavUrl || null,
+    webdavUser: sync.webdavUser || null,
     lastSync: sync.lastSync || null,
     lastStatus: sync.lastStatus || null,
     connectedAt: sync.connectedAt || null
