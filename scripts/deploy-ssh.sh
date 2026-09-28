@@ -2,16 +2,13 @@
 #
 # Worm Panel 一键自动部署
 #
-# 项目约定：脚本通过 WSL 运行，不使用 Git Bash。
-#
-# 流程：环境守卫 -> 配置装载 -> SSH 预检 -> 增量同步 -> 远端构建重启 -> 部署后自检
+# 流程：配置装载 -> 增量同步（git 检测 + scp）-> 远端构建重启 -> 部署后自检
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$REPO_ROOT/.env"
-SYNC_SCRIPT="$SCRIPT_DIR/sync-and-deploy.sh"
 SERVICE_NAME="worm-panel"
 
 RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; CYAN=$'\033[0;36m'; NC=$'\033[0m'
@@ -22,22 +19,22 @@ log_error() { echo "${RED}[ERROR]${NC} $1"; }
 
 usage() {
   cat <<'USAGE'
-Worm Panel 一键自动部署（项目约定：通过 WSL 运行）
+Worm Panel 一键自动部署
 
 用法（在仓库根目录）:
-  bash scripts/auto-deploy.sh                        按 .env 配置部署
-  bash scripts/auto-deploy.sh --server root@IP --dir /root/worm-panel
-  bash scripts/auto-deploy.sh --dry-run              仅列出将同步的文件，不推送
-  bash scripts/auto-deploy.sh --verify-only          仅做部署后自检
-  bash scripts/auto-deploy.sh --skip-verify          跳过部署后自检
-  bash scripts/auto-deploy.sh --from <ref>           额外同步 <ref> 到 HEAD 之间已提交的变更
-  bash scripts/auto-deploy.sh --verify-heavy         自检时实际调用 pm2.reloadAll（会重启 PM2 进程）
-  bash scripts/auto-deploy.sh --allow-non-wsl        允许非 WSL 环境运行（不推荐）
-  bash scripts/auto-deploy.sh --install-dir /opt/worm-panel
+  bash scripts/deploy-ssh.sh                        按 .env 配置部署
+  bash scripts/deploy-ssh.sh --server root@IP --dir /root/worm-panel
+  bash scripts/deploy-ssh.sh --dry-run              仅列出将同步的文件，不推送
+  bash scripts/deploy-ssh.sh --verify-only          仅做部署后自检
+  bash scripts/deploy-ssh.sh --skip-verify          跳过部署后自检
+  bash scripts/deploy-ssh.sh --from <ref>           额外同步 <ref> 到 HEAD 之间已提交的变更
+  bash scripts/deploy-ssh.sh --verify-heavy         自检时实际调用 pm2.reloadAll（会重启 PM2 进程）
+  bash scripts/deploy-ssh.sh --install-dir /opt/worm-panel
 
 说明:
   DEPLOY_DIR        同步暂存目录（scp 落点），默认 /root/worm-panel
   DEPLOY_INSTALL_DIR 远端运行目录（构建与 systemd 服务的实际路径），默认 /opt/worm-panel
+  默认只同步工作区（未提交）改动；改动已提交时请加 --from <ref>
 
 配置优先级: 命令行参数 > 环境变量 > 仓库根 .env
 USAGE
@@ -52,7 +49,6 @@ DRY_RUN=0
 VERIFY_ONLY=0
 SKIP_VERIFY=0
 VERIFY_HEAVY=0
-ALLOW_NON_WSL=0
 NO_SYNC=0
 
 while [ $# -gt 0 ]; do
@@ -66,29 +62,12 @@ while [ $# -gt 0 ]; do
     --verify-only)   VERIFY_ONLY=1; shift ;;
     --skip-verify)   SKIP_VERIFY=1; shift ;;
     --verify-heavy)  VERIFY_HEAVY=1; shift ;;
-    --allow-non-wsl) ALLOW_NON_WSL=1; shift ;;
     -h|--help)       usage ;;
     *) log_error "未知参数: $1"; usage ;;
   esac
 done
 
-# ── 1. 环境守卫：本项目约定 shell 脚本走 WSL ──
-
-case "$(uname -s)" in
-  Linux*) ;;
-  *)
-    if [ "$ALLOW_NON_WSL" -eq 1 ]; then
-      log_warn "当前不是 Linux/WSL 环境（$(uname -s)），已通过 --allow-non-wsl 继续"
-    else
-      log_error "检测到非 WSL/Linux 环境（$(uname -s)）。请改用 WSL 运行："
-      log_error "  wsl -e bash -lc 'bash /mnt/d/Project/worm-panel/scripts/auto-deploy.sh'"
-      log_error "如确需在当前环境运行，请追加 --allow-non-wsl"
-      exit 1
-    fi
-    ;;
-esac
-
-# ── 2. 配置装载（参数 > 环境变量 > .env）──
+# ── 1. 配置装载（参数 > 环境变量 > .env）──
 
 ENV_SERVER=""
 ENV_DIR=""
@@ -102,57 +81,141 @@ fi
 SERVER="${ARG_SERVER:-${DEPLOY_SERVER:-$ENV_SERVER}}"
 REMOTE_DIR="${ARG_DIR:-${DEPLOY_DIR:-$ENV_DIR}}"
 REMOTE_DIR="${REMOTE_DIR:-/root/worm-panel}"
-# 远端运行目录：deploy.sh 会把暂存目录 rsync 到这里并在其中构建、跑 systemd 服务
+# 远端运行目录：deploy-local.sh 会把暂存目录 rsync 到这里并在其中构建、跑 systemd 服务
 INSTALL_DIR="${ARG_INSTALL_DIR:-${DEPLOY_INSTALL_DIR:-/opt/worm-panel}}"
 
 if [ -z "$SERVER" ]; then
   log_error "未配置部署服务器。请指定 --server，或创建 $ENV_FILE"
-  log_error "  bash scripts/auto-deploy.sh --server root@<ip> --dir <远端目录>"
+  log_error "  bash scripts/deploy-ssh.sh --server root@<ip> --dir <远端目录>"
   exit 1
 fi
-
-# sync-and-deploy.sh 自行从 .env 读取配置，因此把生效值落盘，保证两处一致
-if [ ! -f "$ENV_FILE" ] || [ "$SERVER" != "$ENV_SERVER" ] || [ "$REMOTE_DIR" != "$ENV_DIR" ]; then
-  printf '# 部署配置（不纳入版本控制）\nDEPLOY_SERVER=%s\nDEPLOY_DIR=%s\n' "$SERVER" "$REMOTE_DIR" > "$ENV_FILE"
-  log_ok "已写入 $ENV_FILE"
-fi
-
-log_info "部署目标: $SERVER  （暂存 $REMOTE_DIR / 运行 $INSTALL_DIR）"
-
-# ── 3. 本地工具预检 ──
-
-for tool in git ssh scp awk sed grep sort; do
-  command -v "$tool" >/dev/null 2>&1 || { log_error "缺少本地工具: $tool"; exit 1; }
-done
-log_ok "本地工具齐全 (git/ssh/scp/awk/sed/grep/sort)"
 
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15)
 
-# ── 4. 远端预检 ──
+# ── 2. 变更检测与增量同步 ──
 
-log_info "检查 SSH 连通性..."
-if ! ssh "${SSH_OPTS[@]}" "$SERVER" "true" 2>/dev/null; then
-  log_error "无法免密登录 $SERVER，请确认："
-  log_error "  1) WSL 中存在可用私钥（~/.ssh/id_rsa，权限 0600）"
-  log_error "  2) 服务器 22 端口可达"
-  exit 1
+cd "$REPO_ROOT"
+
+# 用 git status --porcelain 统一收集变更（已修改 + 新增 + 删除 + 重命名）。
+# 输出格式：每行 "XY <path>"（重命名为 "R  orig -> new"），据此拆分状态与路径。
+#
+# 注意 core.autocrlf：Windows 侧通常为 true（检出为 CRLF），WSL 侧默认未设置，
+# 会把所有 CRLF 文本文件误判为"已修改"，进而把整份工作区推上服务器。
+# 这里用 -c 做一次性覆盖（不写入仓库或全局 git 配置），保证两端变更集一致。
+STATUS=$(git -c core.autocrlf=true status --porcelain 2>/dev/null || true)
+
+# 可选：把 --from <ref> 到 HEAD 之间「已提交」的变更也并入待同步集合，
+# 统一归一化成与 `git status --porcelain` 相同的 "XY path" 形式（重命名拆为删旧+增新）。
+if [ -n "$ARG_FROM" ]; then
+  if ! git rev-parse --verify --quiet "$ARG_FROM^{commit}" >/dev/null; then
+    log_error "--from 指定的 ref 无效: $ARG_FROM"
+    exit 1
+  fi
+  COMMITTED=$(git diff --name-status "$ARG_FROM" HEAD 2>/dev/null | awk -F'\t' '
+    NF < 2 { next }
+    {
+      s = $1
+      if (s ~ /^[RC]/) { print "DD " $2; print "MM " $3 }
+      else { c = substr(s, 1, 1); print c c " " $2 }
+    }' || true)
+  STATUS=$(printf '%s\n%s\n' "$STATUS" "$COMMITTED")
 fi
-log_ok "SSH 免密登录正常"
 
-REMOTE_CHECK=$(ssh "${SSH_OPTS[@]}" "$SERVER" "
-  test -d '$REMOTE_DIR' && echo DIR_OK || echo DIR_MISSING
-  test -d '$INSTALL_DIR' && echo INSTALL_OK || echo INSTALL_MISSING
-  command -v node >/dev/null 2>&1 && echo NODE_OK || echo NODE_MISSING
-  systemctl is-active $SERVICE_NAME 2>/dev/null || echo SERVICE_UNKNOWN
-" 2>/dev/null || true)
+# 排除的路径前缀（构建产物、依赖、运行时数据、规划文档、开发期工具链等）
+# 注意：test/、CI 工作流与 lint/format 配置只在开发与 CI 使用，不推送到生产服务器
+EXCLUDE='node_modules|\.git|public/|data/|^openspec/|^\.claude/|^test/|^\.github/|^vitest\.config\.js|^eslint\.config\.js|^\.prettierrc|^\.prettierignore'
 
-echo "$REMOTE_CHECK" | grep -q DIR_OK     || { log_error "远端暂存目录不存在: $REMOTE_DIR"; exit 1; }
-echo "$REMOTE_CHECK" | grep -q INSTALL_OK || { log_error "远端运行目录不存在: $INSTALL_DIR"; exit 1; }
-echo "$REMOTE_CHECK" | grep -q NODE_OK    || { log_error "远端未找到 node，无法构建"; exit 1; }
-log_ok "远端暂存目录 / 运行目录 / node 就绪"
-log_info "部署前服务状态: $(echo "$REMOTE_CHECK" | tail -n 1)"
+# 需要同步（新增/修改/重命名）的文件：排除已删除项
+CHANGED=$(echo "$STATUS" | awk '
+  {
+    st = substr($0, 1, 2)
+    path = substr($0, 4)
+    # 重命名/复制取箭头后的新路径
+    if (path ~ / -> /) { sub(/^.* -> /, "", path) }
+    # 去除可能的引号（含特殊字符文件名时 git 会加引号）
+    gsub(/^"|"$/, "", path)
+    # 跳过已删除的文件（在 DELETED 中单独处理）
+    if (st ~ /D/) next
+    print path
+  }' | grep -v '^$' | grep -vE "$EXCLUDE" | sort -u || true)
 
-# ── 5. 部署后自检 ──
+# 已删除的文件：需要在远端一并删除
+DELETED=$(echo "$STATUS" | awk '
+  {
+    st = substr($0, 1, 2)
+    path = substr($0, 4)
+    if (path ~ / -> /) { sub(/^.* -> /, "", path) }
+    gsub(/^"|"$/, "", path)
+    if (st ~ /D/) print path
+  }' | grep -v '^$' | grep -vE "$EXCLUDE" | sort -u || true)
+
+ALL_FILES="$CHANGED"
+NO_SYNC=0
+
+if [ "$VERIFY_ONLY" -eq 1 ]; then
+  log_info "仅执行部署后自检（--verify-only）"
+  NO_SYNC=1
+elif [ "$DRY_RUN" -eq 1 ]; then
+  if [ -z "$ALL_FILES" ]; then
+    log_info "No files to sync（工作区无改动；若变更已提交，请加 --from <ref>）"
+  else
+    echo ""
+    log_info "Files to sync ($(echo "$ALL_FILES" | wc -l) files):"
+    echo "$ALL_FILES" | sed 's/^/  /'
+  fi
+  echo ""
+  log_info "DRY RUN：仅列出变更文件，不推送"
+  exit 0
+elif [ -z "$ALL_FILES" ]; then
+  log_info "No files to sync（工作区无改动；若变更已提交，请加 --from <ref>）"
+  NO_SYNC=1
+else
+  echo ""
+  log_info "Files to sync ($(echo "$ALL_FILES" | wc -l) files):"
+  echo "$ALL_FILES" | sed 's/^/  /'
+
+  log_info "部署目标: $SERVER  （暂存 $REMOTE_DIR / 运行 $INSTALL_DIR）"
+
+  # 为新文件创建远端目录
+  for d in $(dirname $ALL_FILES | sort -u); do
+    ssh "${SSH_OPTS[@]}" "$SERVER" "mkdir -p '$REMOTE_DIR/$d'"
+  done
+
+  log_info "Syncing files..."
+  SYNC_FAILED=""
+  for f in $ALL_FILES; do
+    if [ -f "$REPO_ROOT/$f" ]; then
+      if scp "${SSH_OPTS[@]}" "$REPO_ROOT/$f" "$SERVER:$REMOTE_DIR/$f"; then
+        echo "  ✓ $f"
+      else
+        echo "  ✗ $f"
+        SYNC_FAILED="$SYNC_FAILED $f"
+      fi
+    fi
+  done
+
+  for f in $DELETED; do
+    ssh "${SSH_OPTS[@]}" "$SERVER" "rm -f '$REMOTE_DIR/$f'" && echo "  - $f (deleted)" || true
+  done
+
+  if [ -n "$SYNC_FAILED" ]; then
+    log_error "同步失败的文件:$SYNC_FAILED"
+    exit 1
+  fi
+
+  log_ok "增量同步完成"
+
+  # ── 远端构建与重启 ──
+
+  echo ""
+  log_info "在服务器上执行 scripts/deploy-local.sh ..."
+  if ! ssh "${SSH_OPTS[@]}" "$SERVER" "cd '$REMOTE_DIR' && bash scripts/deploy-local.sh"; then
+    log_error "远端部署失败（scripts/deploy-local.sh 返回非零），请检查上方输出"
+    exit 1
+  fi
+fi
+
+# ── 3. 部署后自检 ──
 
 verify_deployed() {
   local failed=0
@@ -299,40 +362,6 @@ REMOTE_NODE
 
   return "$failed"
 }
-
-# ── 6. 执行 ──
-
-SYNC_ARGS=()
-if [ -n "$ARG_FROM" ]; then
-  SYNC_ARGS=(--from "$ARG_FROM")
-fi
-
-if [ "$VERIFY_ONLY" -eq 1 ]; then
-  log_info "仅执行部署后自检（--verify-only）"
-elif [ "$DRY_RUN" -eq 1 ]; then
-  # 复用 sync-and-deploy.sh 的变更检测与排除规则，避免两处逻辑分叉
-  log_info "DRY RUN：仅列出将同步的变更文件，不推送"
-  echo ""
-  DRY_RUN=1 bash "$SYNC_SCRIPT" ${SYNC_ARGS[@]+"${SYNC_ARGS[@]}"}
-  exit 0
-else
-  log_info "开始增量同步并触发远端构建与重启..."
-  echo ""
-  # sync-and-deploy.sh 以退出码 3 表示「没有可同步的文件」，
-  # 此时远端不会构建/重启，据此外置提醒，避免把「旧版本自检通过」误报为部署成功。
-  set +e
-  bash "$SYNC_SCRIPT" ${SYNC_ARGS[@]+"${SYNC_ARGS[@]}"}
-  SYNC_RC=$?
-  set -e
-  if [ "$SYNC_RC" -eq 3 ]; then
-    NO_SYNC=1
-  elif [ "$SYNC_RC" -ne 0 ]; then
-    log_error "同步失败（退出码 $SYNC_RC）"
-    exit "$SYNC_RC"
-  fi
-fi
-
-# ── 7. 自检 ──
 
 echo ""
 if [ "$SKIP_VERIFY" -eq 1 ]; then

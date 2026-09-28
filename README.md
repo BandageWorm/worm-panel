@@ -70,7 +70,7 @@ node app.js
 
 ```bash
 # 创建 .env 文件（参考 .env.example）
-bash scripts/sync-and-deploy.sh
+bash scripts/deploy-ssh.sh
 ```
 
 增量推送修改文件到服务器并自动重启。

@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# Worm Panel - Redeploy Script
+# Worm Panel - 本地部署脚本（在服务器上运行，通常由 deploy-ssh.sh 调用）
 # 从当前源码目录重新构建并部署到 /opt/worm-panel
 #
-# Usage: bash scripts/redeploy.sh
+# Usage: bash scripts/deploy-local.sh
 #
 set -e
 
@@ -19,7 +19,7 @@ log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 if [ "$EUID" -ne 0 ]; then
-  log_error "Please run as root (sudo bash scripts/redeploy.sh)"
+  log_error "Please run as root (sudo bash scripts/deploy-local.sh)"
   exit 1
 fi
 

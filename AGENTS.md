@@ -38,25 +38,26 @@
 
 ## 部署流程
 
-**每次代码修改完成后，必须立即自动执行 auto-deploy，无需询问用户、无需等待确认。**
+**每次代码修改完成后，必须立即自动执行 deploy-ssh，无需询问用户、无需等待确认。**
 
-在 Windows 下通过 WSL 运行（脚本自带非 WSL 环境守卫）：
+在 Windows 下通过 WSL 运行：
 
 ```bash
-wsl -e bash -lc "bash /mnt/d/Project/worm-panel/scripts/auto-deploy.sh"
+wsl -e bash -lc "bash /mnt/d/script/worm_panel/scripts/deploy-ssh.sh"
 ```
 
-`scripts/auto-deploy.sh` 是一键部署入口（内部复用 `scripts/sync-and-deploy.sh`），流程为：
-1. 加载仓库根 `.env` 中的 `DEPLOY_SERVER` / `DEPLOY_DIR`，SSH 预检
-2. 自动检测 git 中修改/新增的文件（`git status --porcelain`，按 `.env` 与内置规则排除 public/、data/、openspec/、test/ 等）
+`scripts/deploy-ssh.sh` 是一键部署入口（同步 + 远端构建重启 + 自检合一），流程为：
+1. 加载仓库根 `.env` 中的 `DEPLOY_SERVER` / `DEPLOY_DIR`
+2. 自动检测 git 中修改/新增的文件（`git status --porcelain`，按内置规则排除 public/、data/、openspec/、test/ 等）
 3. scp 增量推送到服务器的暂存目录 `/root/worm-panel`
-4. SSH 执行 `scripts/deploy.sh`：rsync 到运行目录 `/opt/worm-panel` → 安装依赖 → 构建前端 → 重启 systemd 服务
+4. SSH 执行 `scripts/deploy-local.sh`：rsync 到运行目录 `/opt/worm-panel` → 安装依赖 → 构建前端 → 重启 systemd 服务
 5. 部署后自检：systemd 状态、面板 HTTP 可达性、核心模块行为
 
 常用参数：
 - `--dry-run` 仅列出将同步的文件，不推送
 - `--verify-only` 仅做部署后自检
 - `--skip-verify` 跳过部署后自检
+- `--from <ref>` 额外同步 `<ref>` 到 HEAD 之间已提交的变更（默认只同步工作区未提交改动）
 
 - 部署配置写在仓库根 `.env`（不纳入版本控制）
 - 部署失败时必须明确报告失败步骤与原因，不得静默跳过
@@ -99,6 +100,6 @@ wsl -e bash -lc "bash /mnt/d/Project/worm-panel/scripts/auto-deploy.sh"
 - 修改 Nginx 配置前自动备份，保留最近 30 份
 - 除 /api/auth/login 和 /api/setup/* 外，所有 API 需 JWT Bearer token
 - 归档 OpenSpec 变更时：先同步 delta specs 到主 specs，再归档
-- 每次改完代码立即执行 auto-deploy（见上方「部署流程」），不要等用户要求
+- 每次改完代码立即执行 deploy-ssh（见上方「部署流程」），不要等用户要求
 - UI需要支持响应式布局，手机端方便访问
 - 不使用Courier New字体
