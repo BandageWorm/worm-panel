@@ -1,6 +1,7 @@
 <template>
-  <div class="dashboard" v-loading="loading" element-loading-text="加载中...">
-    <template v-if="!loading">
+  <div class="dashboard">
+    <LoadingBlock v-if="loading" />
+    <template v-else>
     <!-- Server Overview -->
     <el-card class="overview-card" shadow="never">
       <template #header>
@@ -62,7 +63,10 @@
         <div class="resource-body">
           <el-progress type="dashboard" :percentage="memPercent" :color="memColor" />
           <div class="resource-info">{{ formatBytes(info.memory?.used) }} / {{ formatBytes(info.memory?.total) }}</div>
-          <div class="resource-detail">已用 {{ info.memory?.percent || 0 }}%</div>
+          <div class="resource-detail">
+            已用 {{ info.memory?.percent || 0 }}%
+            <template v-if="info.memory?.available"> · 可用 {{ formatBytes(info.memory.available) }}</template>
+          </div>
         </div>
       </el-card>
 
@@ -103,6 +107,7 @@
 
 <script setup>
 
+import LoadingBlock from '../components/LoadingBlock.vue'
 import { formatBytes } from '../composables/useFormat'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { get } from '../api'
@@ -152,9 +157,11 @@ async function fetchData() {
   loading.value = false
 }
 
-onMounted(() => {
-  fetchData()
-  timer = setInterval(fetchData, 5000)
+onMounted(async () => {
+  await fetchData()
+  // 刷新间隔由系统设置决定（秒）
+  const secs = Number(info.value.panel?.dashboardRefresh) || 5
+  timer = setInterval(fetchData, Math.max(2, secs) * 1000)
 })
 
 onUnmounted(() => {

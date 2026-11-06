@@ -1,6 +1,7 @@
 <template>
-  <div class="settings-page" v-loading="loading" element-loading-text="加载中...">
-    <template v-if="!loading">
+  <div class="settings-page">
+    <LoadingBlock v-if="loading" />
+    <template v-else>
     <!-- Basic Settings -->
     <el-card shadow="never" class="settings-card">
       <template #header>
@@ -55,6 +56,46 @@
       </el-form>
     </el-card>
 
+    <!-- Feature Settings -->
+    <el-card shadow="never" class="settings-card">
+      <template #header>
+        <div class="card-header">
+          <el-icon><Odometer /></el-icon>
+          <span>功能设置</span>
+        </div>
+      </template>
+      <el-form :model="form.settings" label-position="top" class="settings-form">
+        <el-form-item>
+          <template #label>
+            <span class="label-with-tip">仪表盘刷新间隔 <span class="form-tip-inline">（秒）</span></span>
+          </template>
+          <el-input-number v-model="form.settings.dashboardRefresh" :min="2" :max="300" :step="1" controls-position="right" style="width:200px" />
+        </el-form-item>
+
+        <el-form-item>
+          <template #label>
+            <span class="label-with-tip">云备份自动同步周期 <span class="form-tip-inline">（小时，0 = 关闭；未连接 WebDAV 时不生效）</span></span>
+          </template>
+          <el-input-number v-model="form.settings.syncInterval" :min="0" :max="168" :step="1" controls-position="right" style="width:200px" />
+        </el-form-item>
+
+        <el-form-item>
+          <template #label>
+            <span class="label-with-tip">在线编辑文件上限 <span class="form-tip-inline">（MB，超过则不允许在浏览器内编辑）</span></span>
+          </template>
+          <el-input-number v-model="form.settings.editMaxSize" :min="1" :max="50" :step="1" controls-position="right" style="width:200px" />
+        </el-form-item>
+
+        <el-form-item>
+          <template #label>
+            <span class="label-with-tip">上传 / 直链大小上限 <span class="form-tip-inline">（MB）</span></span>
+          </template>
+          <el-input-number v-model="form.settings.uploadMaxSize" :min="1" :max="20480" :step="50" controls-position="right" style="width:200px" />
+          <div class="form-tip">修改后会同步更新面板反代的 nginx client_max_body_size，无需重启</div>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
     <!-- Actions -->
     <div class="actions-bar">
       <el-button type="primary" size="large" :loading="saving" @click="handleSave">
@@ -105,6 +146,7 @@
 </template>
 
 <script setup>
+import LoadingBlock from '../components/LoadingBlock.vue'
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, put, post } from '../api'
@@ -118,7 +160,13 @@ const restarting = ref(false)
 const form = reactive({
   port: 4567,
   mode: 'standalone',
-  domain: ''
+  domain: '',
+  settings: {
+    dashboardRefresh: 5,
+    syncInterval: 12,
+    editMaxSize: 1,
+    uploadMaxSize: 500
+  }
 })
 
 const passwordForm = reactive({
@@ -132,6 +180,7 @@ onMounted(async () => {
     form.port = res.port
     form.mode = res.mode
     form.domain = res.domain || ''
+    if (res.settings) Object.assign(form.settings, res.settings)
   } catch (e) {
     ElMessage.error('加载设置失败: ' + e.message)
   }
@@ -150,11 +199,16 @@ async function handleSave() {
     const body = {
       port: form.port,
       mode: form.mode,
-      domain: form.domain || undefined
+      domain: form.domain || undefined,
+      settings: { ...form.settings }
     }
 
     const res = await put('/settings', body)
     try { ElMessage.success(res.message) } catch { alert(res.message) }
+
+    if (res.nginxSynced && res.nginxSynced.error) {
+      ElMessage.warning('nginx 上传上限同步失败：' + res.nginxSynced.error + '（请手动调整 client_max_body_size）', 6000)
+    }
 
     if (res.needsRestart) {
       try { ElMessage.warning('已修改端口或模式，请重启面板使设置生效', 5000) } catch { alert('已修改端口或模式，请重启面板使设置生效') }
@@ -219,8 +273,8 @@ async function confirmRestart() {
 
 <style scoped>
 .settings-page {
+  /* 与其他页面一致：左对齐，仅限制最大宽度（原来 margin: 0 auto 导致整页居中） */
   max-width: 720px;
-  margin: 0 auto;
 }
 .settings-card {
   margin-bottom: 20px;

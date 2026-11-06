@@ -1,7 +1,10 @@
 <template>
   <div class="sync-page">
+    <!-- ⏳ 状态未返回前显示加载圈，避免闪一下"未连接"的表单 -->
+    <LoadingBlock v-if="!statusLoaded" />
+
     <!-- ✅ Connected: Status card -->
-    <template v-if="installed && connected">
+    <template v-else-if="installed && connected">
       <el-card shadow="never" class="status-card">
         <template #header>
           <div class="card-header">
@@ -83,7 +86,7 @@
               <span>拖拽文件到此处，或<em>点击选择</em>上传</span>
             </div>
             <template #tip>
-              <div class="upload-tip">单个文件不超过 500MB</div>
+              <div class="upload-tip">单个文件不超过 {{ info.uploadMaxSize || 500 }}MB</div>
             </template>
           </el-upload>
         </div>
@@ -314,10 +317,12 @@
 </template>
 
 <script setup>
+import LoadingBlock from '../components/LoadingBlock.vue'
 import { ref, onMounted, nextTick, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Timer, WarningFilled, Link, CopyDocument, FolderOpened, Document, Download, Delete, EditPen, Plus } from '@element-plus/icons-vue'
 import { get, post } from '../api'
+import { triggerDownload } from '../composables/useDownload'
 import { useMobile } from '../composables/useMobile'
 import { formatBytes as formatBytesBase, formatTime as formatTimeBase } from '../composables/useFormat'
 
@@ -330,6 +335,8 @@ const { isMobile } = useMobile()
 const installed = ref(true)
 const connected = ref(false)
 const info = ref({})
+// 首次状态请求返回前保持骨架屏，避免闪一下"未连接/安装引导"的界面
+const statusLoaded = ref(false)
 
 // 连接服务商：面板默认走本机 aliyundrive-webdav 代理，故回环/未指定/内网地址视为阿里云盘；
 // 同时识别已知公网 WebDAV 品牌，其余归为通用 WebDAV
@@ -396,6 +403,8 @@ async function fetchStatus() {
     info.value = res
   } catch {
     // ignore
+  } finally {
+    statusLoaded.value = true
   }
 }
 
@@ -502,21 +511,9 @@ function handleDriveUploadSuccess() {
 
 async function handleDownload(row) {
   const path = drivePath.value === '/' ? '/' + row.name : drivePath.value + '/' + row.name
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`/api/drive/download?path=${encodeURIComponent(path)}`, {
-      headers: token ? { Authorization: 'Bearer ' + token } : {}
-    })
-    if (!res.ok) throw new Error('下载失败')
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = row.name
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 60000)
+    const { url } = await get(`/drive/download-ticket?path=${encodeURIComponent(path)}`)
+    triggerDownload(url, row.name)
   } catch (e) {
     ElMessage.error(e.message)
   }
@@ -639,6 +636,7 @@ onMounted(() => {
 .status-card {
   margin-bottom: 16px;
 }
+
 .status-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

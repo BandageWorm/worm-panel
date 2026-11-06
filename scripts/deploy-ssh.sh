@@ -90,7 +90,16 @@ if [ -z "$SERVER" ]; then
   exit 1
 fi
 
-SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15)
+# ControlMaster 复用同一条 TCP 连接：逐文件 scp 时会连续开十几个连接，
+# 容易触发 sshd 的 MaxStartups / 限速，表现为 "Connection closed by ... port 22"，
+# 复用连接后既能避免被拒，也能显著加快增量同步。
+SSH_OPTS=(
+  -o BatchMode=yes
+  -o ConnectTimeout=15
+  -o ControlMaster=auto
+  -o ControlPath=/tmp/worm-deploy-%r@%h-%p
+  -o ControlPersist=600
+)
 
 # ── 2. 变更检测与增量同步 ──
 
@@ -102,7 +111,9 @@ cd "$REPO_ROOT"
 # 注意 core.autocrlf：Windows 侧通常为 true（检出为 CRLF），WSL 侧默认未设置，
 # 会把所有 CRLF 文本文件误判为"已修改"，进而把整份工作区推上服务器。
 # 这里用 -c 做一次性覆盖（不写入仓库或全局 git 配置），保证两端变更集一致。
-STATUS=$(git -c core.autocrlf=true status --porcelain 2>/dev/null || true)
+# 同时用 -uall 让未跟踪文件逐条列出：默认会折叠成 "?? client/public/" 这样的目录，
+# 逐条文件名才能被下面的 scp 正确推送。
+STATUS=$(git -c core.autocrlf=true status --porcelain -uall 2>/dev/null || true)
 
 # 可选：把 --from <ref> 到 HEAD 之间「已提交」的变更也并入待同步集合，
 # 统一归一化成与 `git status --porcelain` 相同的 "XY path" 形式（重命名拆为删旧+增新）。
@@ -123,7 +134,9 @@ fi
 
 # 排除的路径前缀（构建产物、依赖、运行时数据、规划文档、开发期工具链等）
 # 注意：test/、CI 工作流与 lint/format 配置只在开发与 CI 使用，不推送到生产服务器
-EXCLUDE='node_modules|\.git|public/|data/|^openspec/|^\.claude/|^test/|^\.github/|^vitest\.config\.js|^eslint\.config\.js|^\.prettierrc|^\.prettierignore'
+# public/ 与 data/ 加 ^ 锚定：只排除仓库根的构建产物与运行时数据，
+# 否则会误伤 client/public/（前端静态资源源文件，如 favicon）等子目录。
+EXCLUDE='node_modules|\.git|^public/|^data/|^openspec/|^\.claude/|^test/|^\.github/|^vitest\.config\.js|^eslint\.config\.js|^\.prettierrc|^\.prettierignore'
 
 # 需要同步（新增/修改/重命名）的文件：排除已删除项
 CHANGED=$(echo "$STATUS" | awk '
@@ -185,7 +198,16 @@ else
   SYNC_FAILED=""
   for f in $ALL_FILES; do
     if [ -f "$REPO_ROOT/$f" ]; then
-      if scp "${SSH_OPTS[@]}" "$REPO_ROOT/$f" "$SERVER:$REMOTE_DIR/$f"; then
+      # 跨境链路偶发断连，单文件重试 3 次再判定失败
+      OK=0
+      for _attempt in 1 2 3; do
+        if scp "${SSH_OPTS[@]}" "$REPO_ROOT/$f" "$SERVER:$REMOTE_DIR/$f" 2>/dev/null; then
+          OK=1
+          break
+        fi
+        sleep 1
+      done
+      if [ "$OK" -eq 1 ]; then
         echo "  ✓ $f"
       else
         echo "  ✗ $f"
@@ -303,7 +325,9 @@ function check(name, ok, detail) {
       loaded: true,
       exports: {
         load: () => ({ mode: 'standalone', port: 4567 }),
-        save: () => { saveCalls++; }
+        save: () => { saveCalls++; },
+        getSettings: () => ({ dashboardRefresh: 5, syncInterval: 12, editMaxSize: 1, uploadMaxSize: 500 }),
+        DEFAULT_SETTINGS: { dashboardRefresh: 5, syncInterval: 12, editMaxSize: 1, uploadMaxSize: 500 }
       }
     };
     const express = require('express');

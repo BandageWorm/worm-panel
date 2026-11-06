@@ -4,12 +4,13 @@ const fsp = require('fs/promises');
 const path = require('path');
 const multer = require('multer');
 const { sanitizeFilename, assertInside } = require('../utils/paths');
+const { signDownloadTicket } = require('../utils/crypto');
+const config = require('../services/config');
 const logger = require('../utils/logger');
 
 const router = Router();
 
 const DRIVE_DIR = path.join(__dirname, '..', '..', 'data', 'drive');
-const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
 // ── Multer setup ──
 
@@ -38,13 +39,25 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: MAX_FILE_SIZE },
-  // 保留原始文件名（含路径）以便由 sanitizeFilename 显式校验，
-  // 而不是依赖上游默认的静默 basename
-  preservePath: true
-});
+// 上传上限来自「系统设置」；multer 的 limits 只能在实例化时给定，
+// 因此按当前上限缓存实例，改完设置后下一次上传自动生效，无需重启
+function maxUploadMb() {
+  return Number(config.getSettings().uploadMaxSize) || 500;
+}
+
+let uploadCache = { mb: -1, instance: null };
+function getUpload() {
+  const mb = maxUploadMb();
+  if (uploadCache.mb !== mb) {
+    uploadCache = {
+      mb,
+      // preservePath: 保留原始文件名（含路径）以便由 sanitizeFilename 显式校验，
+      // 而不是依赖上游默认的静默 basename
+      instance: multer({ storage, limits: { fileSize: mb * 1024 * 1024 }, preservePath: true })
+    };
+  }
+  return uploadCache.instance;
+}
 
 // ── Path safety ──
 
@@ -116,11 +129,11 @@ router.get('/list', (req, res) => {
 // ── POST /api/drive/upload ──
 
 router.post('/upload', (req, res) => {
-  upload.array('files', 50)(req, res, (err) => {
+  getUpload().array('files', 50)(req, res, (err) => {
     if (err) {
       if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(413).json({ error: '文件大小超过 500MB 限制' });
+          return res.status(413).json({ error: `文件大小超过 ${maxUploadMb()}MB 限制` });
         }
         return res.status(400).json({ error: err.message });
       }
@@ -140,6 +153,27 @@ router.post('/upload', (req, res) => {
   });
 });
 
+// ── GET /api/drive/download-ticket ──
+// 前端先换一个短时效票据，再交给浏览器原生下载，
+// 这样下载是流式落盘的，不会像 blob 方案那样等整个文件读完才弹保存框
+router.get('/download-ticket', (req, res) => {
+  try {
+    const relPath = (req.query.path || '').replace(/\\/g, '/');
+    const target = resolveSafePath(relPath);
+    if (!target) return res.status(400).json({ error: 'Invalid path' });
+    if (!fs.existsSync(target)) return res.status(404).json({ error: '文件不存在' });
+    if (fs.statSync(target).isDirectory()) return res.status(400).json({ error: '不支持下载文件夹' });
+
+    const ticket = signDownloadTicket(relPath);
+    res.json({
+      url: `/api/drive/download?path=${encodeURIComponent(relPath)}&ticket=${encodeURIComponent(ticket)}`
+    });
+  } catch (e) {
+    logger.error('Drive', '生成下载票据失败', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── GET /api/drive/download ──
 
 router.get('/download', (req, res) => {
@@ -152,12 +186,16 @@ router.get('/download', (req, res) => {
     const stat = fs.statSync(target);
     if (stat.isDirectory()) return res.status(400).json({ error: '不支持下载文件夹' });
 
-    const fileName = path.basename(target);
-    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Length', stat.size);
-    const stream = fs.createReadStream(target);
-    stream.pipe(res);
+    // res.download 内部走 sendFile，支持 Range 断点续传与 Content-Disposition
+    res.download(target, path.basename(target), (err) => {
+      if (!err) return;
+      if (res.headersSent) {
+        logger.warn('Drive', '下载中断: ' + err.message);
+      } else {
+        logger.error('Drive', '下载失败', err);
+        res.status(500).json({ error: err.message });
+      }
+    });
   } catch (e) {
     logger.error('Drive', '下载失败', e);
     res.status(500).json({ error: e.message });

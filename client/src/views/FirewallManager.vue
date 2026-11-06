@@ -1,6 +1,7 @@
 <template>
-  <div class="firewall-manager" v-loading="loading" element-loading-text="加载中...">
-    <template v-if="!loading">
+  <div class="firewall-manager">
+    <LoadingBlock v-if="loading" />
+    <template v-else>
       <!-- Status Card -->
       <el-card class="status-card" shadow="never">
         <div class="status-row">
@@ -130,6 +131,7 @@
 </template>
 
 <script setup>
+import LoadingBlock from '../components/LoadingBlock.vue'
 import { ref, onMounted } from 'vue'
 import { get, post, del } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'

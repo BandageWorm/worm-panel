@@ -1,6 +1,7 @@
 <template>
-  <div class="systemd-manager" v-loading="loading" element-loading-text="加载中...">
-    <template v-if="!loading">
+  <div class="systemd-manager">
+    <LoadingBlock v-if="loading" />
+    <template v-else>
       <!-- 工具栏 -->
       <div class="toolbar">
         <el-input
@@ -73,7 +74,7 @@
 
       <!-- 服务详情抽屉 -->
       <el-drawer v-model="detailVisible" :title="detailService?.name || ''" size="500px" direction="rtl">
-        <div v-if="detailLoading" v-loading="true" style="height: 200px"></div>
+        <LoadingBlock v-if="detailLoading" :min-height="140" />
         <div v-else-if="detailData" class="detail-content">
           <el-descriptions :column="1" border size="small">
             <el-descriptions-item label="描述">{{ detailData.description }}</el-descriptions-item>
@@ -108,6 +109,7 @@
 </template>
 
 <script setup>
+import LoadingBlock from '../components/LoadingBlock.vue'
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'

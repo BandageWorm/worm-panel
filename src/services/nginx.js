@@ -279,6 +279,53 @@ async function deleteSite(name) {
   await reload();
 }
 
+// ── 上传大小限制 ──
+// 面板自身的 client_max_body_size 必须与实际上传上限一致，
+// 否则 nginx 会在请求到达 Node 之前直接返回 413。
+async function applyClientMaxBodySize(domain, sizeMb) {
+  const sitesPath = getSitesPath();
+  if (!fs.existsSync(sitesPath)) return { updated: [] };
+
+  const value = `${sizeMb}M`;
+  const escaped = domain ? domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
+  const domainRe = escaped ? new RegExp(`server_name\\s+[^;]*\\b${escaped}\\b`) : null;
+  const originals = new Map();
+  const updated = [];
+
+  for (const file of fs.readdirSync(sitesPath).filter(f => f.endsWith('.conf'))) {
+    const filePath = path.join(sitesPath, file);
+    const text = fs.readFileSync(filePath, 'utf8');
+    const isPanel = file === 'panel.conf' || (domainRe && domainRe.test(text)) || false;
+    if (!isPanel) continue;
+
+    const next = /client_max_body_size\s+[^;]+;/.test(text)
+      ? text.replace(/client_max_body_size\s+[^;]+;/g, `client_max_body_size ${value};`)
+      : text.replace(/(\n\s*server_name\s+[^;]+;)/, `$1\n    client_max_body_size ${value};`);
+
+    if (next === text) continue;
+
+    ensureBackupDir();
+    fs.copyFileSync(filePath, path.join(BACKUP_DIR, `${file}.${formatTimestamp()}.bak`));
+    cleanupOldBackups();
+    fs.writeFileSync(filePath, next, 'utf8');
+    originals.set(filePath, text);
+    updated.push(file);
+  }
+
+  if (updated.length === 0) return { updated };
+
+  const result = await validate();
+  if (!result.valid) {
+    // 校验失败回滚，避免把面板自身配置写坏导致 nginx 无法 reload
+    for (const [filePath, text] of originals) {
+      fs.writeFileSync(filePath, text, 'utf8');
+    }
+    throw new Error('Nginx 配置校验失败: ' + result.message);
+  }
+  await reload();
+  return { updated };
+}
+
 // ── Validate & Reload ──
 
 async function validate() {
@@ -308,8 +355,16 @@ function generateSelfConfig(domain, port) {
     server_name ${domain};
     client_max_body_size 500M;
 
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_vary on;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
     location / {
         proxy_pass http://127.0.0.1:${port};
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -323,20 +378,24 @@ function generateSelfConfig(domain, port) {
 
 function writeSelfConfig() {
   const cfg = config.load();
-  if (cfg.mode !== 'proxy' || !cfg.domain) {
-    const selfPath = path.join(getSitesPath(), 'panel.conf');
+  const sitesPath = getSitesPath();
+  const selfPath = path.join(sitesPath, 'panel.conf');
+  // 域名站点配置（由 SSL 页面生成）已包含 80→443 跳转，
+  // 此时再写 panel.conf 会出现重复 server_name（nginx: conflicting server name，后者被忽略）
+  const domainSitePath = cfg.domain ? path.join(sitesPath, `${cfg.domain}.conf`) : null;
+  const domainSiteExists = !!(domainSitePath && fs.existsSync(domainSitePath));
+
+  if (cfg.mode !== 'proxy' || !cfg.domain || domainSiteExists) {
     if (fs.existsSync(selfPath)) {
       fs.unlinkSync(selfPath);
     }
     return;
   }
 
-  const sitesPath = getSitesPath();
   if (!fs.existsSync(sitesPath)) {
     fs.mkdirSync(sitesPath, { recursive: true });
   }
 
-  const selfPath = path.join(sitesPath, 'panel.conf');
   const content = generateSelfConfig(cfg.domain, cfg.port);
   fs.writeFileSync(selfPath, content, 'utf8');
 }
@@ -445,5 +504,6 @@ function formatTimestamp() {
 module.exports = {
   getStatus, listSites, getSite, createSite, updateSite, deleteSite,
   validate, reload, writeSelfConfig, writeDefaultConfig,
+  applyClientMaxBodySize,
   listBackups, getBackup
 };

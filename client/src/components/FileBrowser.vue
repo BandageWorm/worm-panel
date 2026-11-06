@@ -298,6 +298,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, FolderAdd, Refresh, Folder, Document, UploadFilled, EditPen, Download, Delete, CopyDocument,
   Search, DocumentAdd, MoreFilled, Rank, Box, FolderOpened, Lock } from '@element-plus/icons-vue'
 import { get, del, post, put } from '../api'
+import { triggerDownload } from '../composables/useDownload'
 import { Codemirror } from 'vue-codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { html } from '@codemirror/lang-html'
@@ -502,21 +503,9 @@ async function refresh() {
 }
 
 async function handleDownload(row) {
-  const token = localStorage.getItem('token')
-  const url = `/api/files/download?path=${encodeURIComponent(joinPath(row.name))}`
   try {
-    const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.error || '下载失败')
-    }
-    const blob = await res.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = blobUrl
-    a.download = row.name
-    a.click()
-    URL.revokeObjectURL(blobUrl)
+    const { url } = await get(`/files/download-ticket?path=${encodeURIComponent(joinPath(row.name))}`)
+    triggerDownload(url, row.name)
   } catch (e) {
     ElMessage.error(e.message)
   }

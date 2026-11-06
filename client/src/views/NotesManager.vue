@@ -1,6 +1,7 @@
 <template>
-  <div class="notes-manager" v-loading="loading" element-loading-text="加载中...">
-    <template v-if="!loading">
+  <div class="notes-manager">
+    <LoadingBlock v-if="loading" />
+    <template v-else>
     <div class="notes-sidebar">
       <div class="sidebar-header">
         <el-button size="small" type="primary" @click="handleNew">新建笔记</el-button>
@@ -69,6 +70,7 @@
 
 <script setup>
 
+import LoadingBlock from '../components/LoadingBlock.vue'
 import { formatTime as formatTimeBase } from '../composables/useFormat'
 
 // 该页历史上空时间显示为空字符串，保持原有显示行为

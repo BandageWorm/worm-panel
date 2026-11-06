@@ -32,13 +32,14 @@ log_info "Target directory: $INSTALL_DIR"
 # ── Copy files ──
 
 log_info "Copying project files..."
+# 排除项带 / 前缀锚定传输根目录：不带锚点的 'public'/'data' 会连
+# client/public（前端静态资源源文件，如 favicon）一起排除掉，导致构建产物缺失。
 rsync -a --delete \
   --exclude='.git' \
   --exclude='node_modules' \
-  --exclude='client/node_modules' \
-  --exclude='client/dist' \
-  --exclude='data' \
-  --exclude='public' \
+  --exclude='/client/dist' \
+  --exclude='/data' \
+  --exclude='/public' \
   "$SOURCE_DIR/" "$INSTALL_DIR/"
 
 mkdir -p "$INSTALL_DIR/data/notes"

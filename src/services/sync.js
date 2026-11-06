@@ -272,7 +272,10 @@ async function getStatus() {
     webdavUser: sync.webdavUser || null,
     lastSync: sync.lastSync || null,
     lastStatus: sync.lastStatus || null,
-    connectedAt: sync.connectedAt || null
+    connectedAt: sync.connectedAt || null,
+    // 供前端展示上传大小提示
+    uploadMaxSize: config.getSettings(cfg).uploadMaxSize,
+    syncInterval: config.getSettings(cfg).syncInterval
   };
 
   return result;

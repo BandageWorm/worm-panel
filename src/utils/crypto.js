@@ -53,4 +53,11 @@ function verifyToken(token) {
   return jwt.verify(token, JWT_SECRET);
 }
 
-module.exports = { hashPassword, comparePassword, signToken, verifyToken, JWT_SECRET };
+// 下载票据：浏览器原生下载无法携带 Authorization 头，
+// 因此签发短时效、绑定文件路径的票据放进 URL，
+// 避免把 48 小时有效的登录 token 暴露在地址栏/日志里。
+function signDownloadTicket(filePath, expiresIn = '5m') {
+  return jwt.sign({ sub: 'admin', scope: 'download', p: filePath }, JWT_SECRET, { expiresIn });
+}
+
+module.exports = { hashPassword, comparePassword, signToken, verifyToken, signDownloadTicket, JWT_SECRET };

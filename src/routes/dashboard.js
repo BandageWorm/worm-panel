@@ -54,7 +54,9 @@ router.get('/', async (req, res) => {
         version: '1.0.0',
         mode: cfg.mode,
         port: cfg.port,
-        uptime: process.uptime()
+        uptime: process.uptime(),
+        // 前端据此决定自动刷新间隔
+        dashboardRefresh: config.getSettings(cfg).dashboardRefresh
       }
     });
   } catch (err) {

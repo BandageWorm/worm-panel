@@ -3,6 +3,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const logger = require('../utils/logger');
+const config = require('./config');
 
 const execFileAsync = promisify(execFile);
 
@@ -178,8 +179,10 @@ function readFile(filePath) {
     throw new Error('无法读取目录');
   }
 
-  if (stat.size > 1024 * 1024) {
-    throw new Error('文件过大无法编辑（超过 1MB）');
+  // 在线编辑大小上限可在「系统设置」调整
+  const maxMb = Number(config.getSettings().editMaxSize) || 1;
+  if (stat.size > maxMb * 1024 * 1024) {
+    throw new Error(`文件过大无法编辑（超过 ${maxMb}MB）`);
   }
 
   const content = decodeUtf8(fs.readFileSync(resolved));

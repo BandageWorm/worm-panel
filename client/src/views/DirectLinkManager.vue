@@ -79,7 +79,7 @@
             <el-icon class="upload-icon"><UploadFilled /></el-icon>
             <div class="upload-text">将文件拖到此处，或<em>点击选择</em></div>
             <template #tip>
-              <div class="upload-tip">单文件上限 500MB</div>
+              <div class="upload-tip">单文件上限 {{ uploadMaxSize }}MB</div>
             </template>
           </el-upload>
         </el-form-item>
@@ -109,11 +109,14 @@ import { formatBytes, formatTime } from '../composables/useFormat'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Link, UploadFilled, Refresh, Document, CopyDocument, Download, Delete } from '@element-plus/icons-vue'
-import { listDirectLinks, uploadDirectLink, deleteDirectLink } from '../api'
+import { get, listDirectLinks, uploadDirectLink, deleteDirectLink } from '../api'
 import { useAsyncData } from '../composables/useAsyncData'
 
 // 列表加载收敛到 useAsyncData：loading + 失败提示 + 复位
 const { loading, data: items, load: fetchList } = useAsyncData(() => listDirectLinks(), { initial: [] })
+
+// 上传大小上限来自系统设置，仅用于界面提示
+const uploadMaxSize = ref(500)
 
 const showUpload = ref(false)
 const uploading = ref(false)
@@ -199,8 +202,14 @@ async function handleDelete(row) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   fetchList()
+  try {
+    const res = await get('/settings')
+    uploadMaxSize.value = res.settings?.uploadMaxSize || 500
+  } catch {
+    // 读取失败时沿用默认值
+  }
 })
 </script>
 
