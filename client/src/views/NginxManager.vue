@@ -1,6 +1,7 @@
 <template>
-  <div class="nginx-manager" v-loading="loading" element-loading-text="加载中...">
-    <template v-if="!loading">
+  <div class="nginx-manager">
+    <LoadingBlock v-if="loading" />
+    <template v-else>
     <!-- Status Bar -->
     <div class="status-bar">
       <el-tag :type="nginxRunning ? 'success' : 'danger'" size="small">
@@ -125,6 +126,7 @@
 </template>
 
 <script setup>
+import LoadingBlock from '../components/LoadingBlock.vue'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post, put, del } from '../api'

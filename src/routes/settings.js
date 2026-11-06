@@ -1,10 +1,19 @@
 const { Router } = require('express');
 const config = require('../services/config');
 const nginx = require('../services/nginx');
+const autosync = require('../services/autosync');
 const { hashPassword } = require('../utils/crypto');
 const logger = require('../utils/logger');
 
 const router = Router();
+
+// 功能设置的合法范围，超出则拒绝保存
+const SETTING_LIMITS = {
+  dashboardRefresh: { min: 2, max: 300, label: '仪表盘刷新间隔' },
+  syncInterval: { min: 0, max: 168, label: '云备份自动同步周期' },
+  editMaxSize: { min: 1, max: 50, label: '在线编辑文件上限' },
+  uploadMaxSize: { min: 1, max: 20480, label: '上传大小上限' }
+};
 
 // GET /api/settings — 读取当前设置（不含敏感信息）
 router.get('/', (req, res) => {
@@ -13,17 +22,41 @@ router.get('/', (req, res) => {
     port: cfg.port,
     mode: cfg.mode,
     domain: cfg.domain,
-    initialized: cfg.initialized
+    initialized: cfg.initialized,
+    settings: config.getSettings(cfg)
   });
 });
+
+// 校验并写回 settings，返回错误信息数组
+function applySettings(cfg, input) {
+  if (!input || typeof input !== 'object') return [];
+  const current = config.getSettings(cfg);
+  const next = { ...current };
+  const errors = [];
+
+  for (const [key, limit] of Object.entries(SETTING_LIMITS)) {
+    if (input[key] === undefined) continue;
+    const value = Number(input[key]);
+    if (!Number.isInteger(value) || value < limit.min || value > limit.max) {
+      errors.push(`${limit.label}必须是 ${limit.min}-${limit.max} 之间的整数`);
+      continue;
+    }
+    next[key] = value;
+  }
+
+  if (errors.length === 0) {
+    cfg.settings = next;
+  }
+  return errors;
+}
 
 // PUT /api/settings — 更新设置
 router.put('/', async (req, res) => {
   try {
-    const { port, mode, domain, password } = req.body;
+    const { port, mode, domain, password, settings } = req.body;
     const cfg = config.load();
     const oldMode = cfg.mode;
-    const oldDomain = cfg.domain;
+    const oldUploadMaxSize = config.getSettings(cfg).uploadMaxSize;
     const changes = [];
 
     // 更新端口
@@ -63,6 +96,15 @@ router.put('/', async (req, res) => {
       changes.push('password');
     }
 
+    // 功能设置（刷新间隔 / 同步周期 / 文件大小上限）
+    if (settings !== undefined) {
+      const errors = applySettings(cfg, settings);
+      if (errors.length > 0) {
+        return res.status(400).json({ error: errors.join('；') });
+      }
+      changes.push('settings');
+    }
+
     // 写入配置
     config.save(cfg);
 
@@ -86,9 +128,29 @@ router.put('/', async (req, res) => {
       }
     }
 
+    // 上传上限变化时同步面板 nginx 的 client_max_body_size，否则会被 nginx 先拦成 413
+    const uploadMaxSize = config.getSettings(cfg).uploadMaxSize;
+    let nginxSynced = null;
+    if (uploadMaxSize !== oldUploadMaxSize && cfg.mode === 'proxy' && cfg.domain) {
+      try {
+        const result = await nginx.applyClientMaxBodySize(cfg.domain, uploadMaxSize);
+        nginxSynced = result.updated;
+        if (result.updated.length > 0) changes.push('nginx-body-size');
+      } catch (e) {
+        logger.warn('Settings', `同步 nginx 上传上限失败: ${e.message}`);
+        nginxSynced = { error: e.message };
+      }
+    }
+
+    // 同步周期变化后重新排期，无需重启面板
+    if (changes.includes('settings')) {
+      autosync.start();
+    }
+
     res.json({
       success: true,
       changes,
+      nginxSynced,
       needsRestart: changes.includes('mode') || changes.includes('port'),
       message: '设置已保存'
     });

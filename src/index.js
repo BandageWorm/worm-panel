@@ -27,7 +27,18 @@ function createApp() {
 
   // Static files (Vue build output)
   const publicDir = path.join(__dirname, '..', 'public');
-  app.use(express.static(publicDir));
+  // 构建产物文件名带 hash，可长期强缓存；index.html 必须每次回源校验，否则更新后拿不到新入口
+  app.use('/assets', express.static(path.join(publicDir, 'assets'), {
+    maxAge: '365d',
+    immutable: true
+  }));
+  app.use(express.static(publicDir, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    }
+  }));
 
   // Public routes (no auth required)
   app.use('/api/auth', require('./routes/auth'));

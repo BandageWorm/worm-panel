@@ -90,7 +90,16 @@ if [ -z "$SERVER" ]; then
   exit 1
 fi
 
-SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15)
+# ControlMaster 复用同一条 TCP 连接：逐文件 scp 时会连续开十几个连接，
+# 容易触发 sshd 的 MaxStartups / 限速，表现为 "Connection closed by ... port 22"，
+# 复用连接后既能避免被拒，也能显著加快增量同步。
+SSH_OPTS=(
+  -o BatchMode=yes
+  -o ConnectTimeout=15
+  -o ControlMaster=auto
+  -o ControlPath=/tmp/worm-deploy-%r@%h-%p
+  -o ControlPersist=600
+)
 
 # ── 2. 变更检测与增量同步 ──
 
@@ -185,7 +194,16 @@ else
   SYNC_FAILED=""
   for f in $ALL_FILES; do
     if [ -f "$REPO_ROOT/$f" ]; then
-      if scp "${SSH_OPTS[@]}" "$REPO_ROOT/$f" "$SERVER:$REMOTE_DIR/$f"; then
+      # 跨境链路偶发断连，单文件重试 3 次再判定失败
+      OK=0
+      for _attempt in 1 2 3; do
+        if scp "${SSH_OPTS[@]}" "$REPO_ROOT/$f" "$SERVER:$REMOTE_DIR/$f" 2>/dev/null; then
+          OK=1
+          break
+        fi
+        sleep 1
+      done
+      if [ "$OK" -eq 1 ]; then
         echo "  ✓ $f"
       else
         echo "  ✗ $f"
@@ -303,7 +321,9 @@ function check(name, ok, detail) {
       loaded: true,
       exports: {
         load: () => ({ mode: 'standalone', port: 4567 }),
-        save: () => { saveCalls++; }
+        save: () => { saveCalls++; },
+        getSettings: () => ({ dashboardRefresh: 5, syncInterval: 12, editMaxSize: 1, uploadMaxSize: 500 }),
+        DEFAULT_SETTINGS: { dashboardRefresh: 5, syncInterval: 12, editMaxSize: 1, uploadMaxSize: 500 }
       }
     };
     const express = require('express');

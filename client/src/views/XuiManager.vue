@@ -1,10 +1,11 @@
 <template>
-  <div class="xui-manager" v-loading="loading" element-loading-text="加载中...">
+  <div class="xui-manager">
+    <LoadingBlock v-if="loading" />
     <!-- Status Cards -->
-    <template v-if="!loading">
+    <template v-else>
     <el-row :gutter="16">
       <el-col :xs="12" :sm="12" :md="6">
-        <el-card shadow="never">
+        <el-card shadow="never" class="stat-card">
           <div class="stat-item">
             <div class="stat-label">安装状态</div>
             <div class="stat-value">
@@ -16,7 +17,7 @@
         </el-card>
       </el-col>
       <el-col :xs="12" :sm="12" :md="6">
-        <el-card shadow="never">
+        <el-card shadow="never" class="stat-card">
           <div class="stat-item">
             <div class="stat-label">运行状态</div>
             <div class="stat-value">
@@ -28,7 +29,7 @@
         </el-card>
       </el-col>
       <el-col :xs="12" :sm="12" :md="6">
-        <el-card shadow="never">
+        <el-card shadow="never" class="stat-card">
           <div class="stat-item">
             <div class="stat-label">管理端口</div>
             <div class="stat-value" style="font-size:14px">{{ status.port || '--' }}</div>
@@ -36,7 +37,7 @@
         </el-card>
       </el-col>
       <el-col :xs="12" :sm="12" :md="6">
-        <el-card shadow="never">
+        <el-card shadow="never" class="stat-card">
           <div class="stat-item">
             <div class="stat-label">安装路径</div>
             <div class="stat-value" style="font-size:14px">{{ status.installPath || '--' }}</div>
@@ -93,8 +94,6 @@
         <div class="access-info">
           <span class="info-label">地址:</span>
           <code class="info-value">{{ status.directUrl }}</code>
-          <el-tag size="small" type="info" class="info-tag">端口 {{ status.port }}</el-tag>
-          <el-tag size="small" type="info" v-if="status.webPath">路径 {{ status.webPath }}</el-tag>
         </div>
       </div>
     </el-card>
@@ -146,6 +145,7 @@
 </template>
 
 <script setup>
+import LoadingBlock from '../components/LoadingBlock.vue'
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post, del } from '../api'
@@ -215,9 +215,17 @@ function copyCmd() {
 .xui-manager {
   max-width: 1200px;
 }
+/* 四张状态卡等高：内容分别是 tag 和文本，行内高度不一致会显得没对齐 */
+.stat-card {
+  height: 100%;
+}
 .stat-item {
   text-align: center;
   padding: 8px 0;
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .stat-label {
   font-size: 13px;

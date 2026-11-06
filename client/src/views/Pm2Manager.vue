@@ -1,6 +1,7 @@
 <template>
-  <div class="pm2-manager" v-loading="loading" element-loading-text="加载中...">
-    <template v-if="!loading">
+  <div class="pm2-manager">
+    <LoadingBlock v-if="loading" />
+    <template v-else>
     <el-tabs v-model="activeTab">
       <el-tab-pane label="进程列表" name="processes">
         <el-table :data="processes" stripe v-loading="loading" size="small">
@@ -158,6 +159,7 @@
 </template>
 
 <script setup>
+import LoadingBlock from '../components/LoadingBlock.vue'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { get, post, put, del } from '../api'

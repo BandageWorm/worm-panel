@@ -3,11 +3,15 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const directlink = require('../services/directlink');
+const config = require('../services/config');
 const logger = require('../utils/logger');
 
 const router = Router();
 
-const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+// 上传上限来自「系统设置」，按当前上限缓存 multer 实例，改完设置即时生效
+function maxUploadMb() {
+  return Number(config.getSettings().uploadMaxSize) || 500;
+}
 
 // 每次上传临时生成一个 token，multer 直接以 token 作为物理文件名存入 files/
 const storage = multer.diskStorage({
@@ -22,7 +26,14 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage, limits: { fileSize: MAX_FILE_SIZE } });
+let uploadCache = { mb: -1, instance: null };
+function getUpload() {
+  const mb = maxUploadMb();
+  if (uploadCache.mb !== mb) {
+    uploadCache = { mb, instance: multer({ storage, limits: { fileSize: mb * 1024 * 1024 } }) };
+  }
+  return uploadCache.instance;
+}
 
 // 根据请求拼接完整直链 URL。
 // 末尾带上编码后的原文件名，使 wget/curl 等不读 Content-Disposition 的下载器
@@ -48,10 +59,10 @@ function decodeOriginalName(name) {
 
 // ── POST /api/directlink/upload ──
 router.post('/upload', (req, res) => {
-  upload.single('file')(req, res, async (err) => {
+  getUpload().single('file')(req, res, async (err) => {
     if (err) {
       if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(413).json({ error: '文件大小超过 500MB 限制' });
+        return res.status(413).json({ error: `文件大小超过 ${maxUploadMb()}MB 限制` });
       }
       return res.status(400).json({ error: err.message });
     }

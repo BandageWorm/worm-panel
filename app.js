@@ -5,7 +5,7 @@ const { createApp } = require('./src/index');
 const config = require('./src/services/config');
 const nginx = require('./src/services/nginx');
 const cert = require('./src/services/cert');
-const sync = require('./src/services/sync');
+const autosync = require('./src/services/autosync');
 const { createTerminal } = require('./src/services/terminal');
 const logger = require('./src/utils/logger');
 
@@ -74,18 +74,8 @@ if (useHttps) {
   startServer(server);
 }
 
-const SYNC_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
-let syncTimer = null;
-
 function startPeriodicSync() {
-  if (syncTimer) clearInterval(syncTimer);
-  const cfg = config.load();
-  if (cfg.sync?.refreshToken) {
-    logger.info('Sync', '12小时定时同步已启动');
-    syncTimer = setInterval(() => {
-      sync.triggerBackup();
-    }, SYNC_INTERVAL_MS);
-  }
+  autosync.start();
 }
 
 function showSetupInfo(host, port, protocol) {

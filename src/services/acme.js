@@ -257,15 +257,26 @@ async function applyToNginx(domain, targetPort) {
   }
 
   // Generate SSL nginx config
+  // http2 + 压缩 + TLS 会话复用：否则 1MB 级的 JS 会以未压缩形式逐个串行下载，首屏极慢
   const sslConfig = `server {
-    listen 443 ssl;
+    listen 443 ssl http2;
     server_name ${domain};
 
     ssl_certificate     ${cert.certPath};
     ssl_certificate_key ${cert.keyPath};
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_vary on;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
 
     location / {
         proxy_pass http://127.0.0.1:${targetPort};
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

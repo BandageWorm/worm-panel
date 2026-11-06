@@ -1,6 +1,7 @@
 <template>
-  <div class="cron-manager" v-loading="loading" element-loading-text="加载中...">
-    <template v-if="!loading">
+  <div class="cron-manager">
+    <LoadingBlock v-if="loading" />
+    <template v-else>
       <!-- Jobs Table -->
       <el-card shadow="never">
         <template #header>
@@ -159,6 +160,7 @@
 </template>
 
 <script setup>
+import LoadingBlock from '../components/LoadingBlock.vue'
 import { ref, onMounted } from 'vue'
 import { get, post, put, del } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'

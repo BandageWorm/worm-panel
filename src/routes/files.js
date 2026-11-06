@@ -4,7 +4,9 @@ const fs = require('fs');
 const os = require('os');
 const multer = require('multer');
 const files = require('../services/files');
+const config = require('../services/config');
 const { sanitizeFilename, assertInside } = require('../utils/paths');
+const { signDownloadTicket } = require('../utils/crypto');
 const logger = require('../utils/logger');
 
 const router = Router();
@@ -13,7 +15,23 @@ const router = Router();
 // 使用面板私有临时目录，避免固定路径带来的权限/并发冲突
 const UPLOAD_TMP_DIR = path.join(os.tmpdir(), 'worm-panel-upload');
 fs.mkdirSync(UPLOAD_TMP_DIR, { recursive: true });
-const upload = multer({ dest: UPLOAD_TMP_DIR, preservePath: true });
+
+// 上传上限来自「系统设置」，与云备份/直链保持一致
+function maxUploadMb() {
+  return Number(config.getSettings().uploadMaxSize) || 500;
+}
+
+let uploadCache = { mb: -1, instance: null };
+function getUpload() {
+  const mb = maxUploadMb();
+  if (uploadCache.mb !== mb) {
+    uploadCache = {
+      mb,
+      instance: multer({ dest: UPLOAD_TMP_DIR, preservePath: true, limits: { fileSize: mb * 1024 * 1024 } })
+    };
+  }
+  return uploadCache.instance;
+}
 
 // List directory
 router.get('/', (req, res) => {
@@ -23,6 +41,23 @@ router.get('/', (req, res) => {
     res.json(result);
   } catch (e) {
     res.status(400).json({ error: e.message });
+  }
+});
+
+// 下载票据：前端用它拼出可直接交给浏览器原生下载的 URL（流式落盘，无需整文件进内存）
+router.get('/download-ticket', (req, res) => {
+  try {
+    const filePath = req.query.path;
+    if (!filePath) {
+      return res.status(400).json({ error: '路径不能为空' });
+    }
+    files.getFileInfo(filePath); // 校验存在且不是目录
+    const ticket = signDownloadTicket(filePath);
+    res.json({
+      url: `/api/files/download?path=${encodeURIComponent(filePath)}&ticket=${encodeURIComponent(ticket)}`
+    });
+  } catch (e) {
+    res.status(statusFor(e.message)).json({ error: e.message });
   }
 });
 
@@ -41,42 +76,54 @@ router.get('/download', (req, res) => {
 });
 
 // Upload file
-router.post('/upload', upload.single('file'), (req, res) => {
-  try {
-    const destDir = req.query.path || '/';
-    if (!req.file) {
-      return res.status(400).json({ error: '请选择文件' });
+router.post('/upload', (req, res) => {
+  getUpload().single('file')(req, res, (err) => {
+    if (err) {
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch {}
+      }
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: `文件大小超过 ${maxUploadMb()}MB 限制` });
+      }
+      return res.status(400).json({ error: err.message });
     }
 
-    const targetDir = path.resolve(destDir);
+    try {
+      const destDir = req.query.path || '/';
+      if (!req.file) {
+        return res.status(400).json({ error: '请选择文件' });
+      }
 
-    // Ensure targetDir starts with /
-    if (!targetDir.startsWith('/')) {
-      // Clean up temp file
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: '只允许绝对路径' });
+      const targetDir = path.resolve(destDir);
+
+      // Ensure targetDir starts with /
+      if (!targetDir.startsWith('/')) {
+        // Clean up temp file
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: '只允许绝对路径' });
+      }
+
+      if (!fs.existsSync(targetDir)) {
+        throw new Error('目标目录不存在');
+      }
+
+      // 净化文件名，并确认最终路径未逃逸目标目录
+      const safeName = sanitizeFilename(req.file.originalname);
+      const targetPath = assertInside(targetDir, path.join(targetDir, safeName));
+
+      // Move file from temp location
+      fs.renameSync(req.file.path, targetPath);
+
+      res.json({ success: true, name: safeName, path: targetPath });
+    } catch (e) {
+      // Clean up temp file if exists
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch {}
+      }
+      logger.error('Files', '上传文件失败', e);
+      res.status(400).json({ error: e.message });
     }
-
-    if (!fs.existsSync(targetDir)) {
-      throw new Error('目标目录不存在');
-    }
-
-    // 净化文件名，并确认最终路径未逃逸目标目录
-    const safeName = sanitizeFilename(req.file.originalname);
-    const targetPath = assertInside(targetDir, path.join(targetDir, safeName));
-
-    // Move file from temp location
-    fs.renameSync(req.file.path, targetPath);
-
-    res.json({ success: true, name: safeName, path: targetPath });
-  } catch (e) {
-    // Clean up temp file if exists
-    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-      try { fs.unlinkSync(req.file.path); } catch {}
-    }
-    logger.error('Files', '上传文件失败', e);
-    res.status(400).json({ error: e.message });
-  }
+  });
 });
 
 // Delete file/dir
