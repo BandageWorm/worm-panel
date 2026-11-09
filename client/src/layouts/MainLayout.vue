@@ -25,29 +25,13 @@
           <el-icon><Folder /></el-icon>
           <span>文件管理</span>
         </el-menu-item>
-        <el-menu-item index="/directlink">
-          <el-icon><Link /></el-icon>
-          <span>文件直链</span>
-        </el-menu-item>
         <el-menu-item index="/terminal">
           <el-icon><Monitor /></el-icon>
           <span>终端</span>
         </el-menu-item>
-        <el-menu-item index="/firewall">
-          <el-icon><Key /></el-icon>
-          <span>防火墙</span>
-        </el-menu-item>
-        <el-menu-item index="/nginx">
+        <el-menu-item index="/network">
           <el-icon><Connection /></el-icon>
-          <span>Nginx</span>
-        </el-menu-item>
-        <el-menu-item index="/ssl">
-          <el-icon><Lock /></el-icon>
-          <span>SSL 证书</span>
-        </el-menu-item>
-        <el-menu-item index="/cron">
-          <el-icon><Timer /></el-icon>
-          <span>计划任务</span>
+          <span>网络</span>
         </el-menu-item>
         <el-menu-item index="/notes">
           <el-icon><Edit /></el-icon>
@@ -57,25 +41,13 @@
           <el-icon><Cpu /></el-icon>
           <span>PM2</span>
         </el-menu-item>
-        <el-menu-item index="/systemd">
+        <el-menu-item index="/system">
           <el-icon><Setting /></el-icon>
-          <span>Systemd</span>
-        </el-menu-item>
-        <el-menu-item index="/xui">
-          <el-icon><Grid /></el-icon>
-          <span>3X-UI</span>
+          <span>系统状态</span>
         </el-menu-item>
         <el-menu-item index="/sync">
           <el-icon><UploadFilled /></el-icon>
           <span>云备份</span>
-        </el-menu-item>
-        <el-menu-item index="/alerts">
-          <el-icon><Bell /></el-icon>
-          <span>告警</span>
-        </el-menu-item>
-        <el-menu-item index="/ports">
-          <el-icon><Share /></el-icon>
-          <span>端口与进程</span>
         </el-menu-item>
         <el-menu-item index="/logs">
           <el-icon><Document /></el-icon>

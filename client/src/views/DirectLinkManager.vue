@@ -1,19 +1,16 @@
 <template>
   <div class="directlink-manager">
-    <el-card shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span class="card-title"><el-icon><Link /></el-icon> 文件直链</span>
-          <div class="header-actions">
-            <el-button size="small" type="primary" @click="showUpload = true">
-              <el-icon><UploadFilled /></el-icon> 上传文件
-            </el-button>
-            <el-button size="small" @click="fetchList" :loading="loading" :icon="Refresh">刷新</el-button>
-          </div>
-        </div>
-      </template>
+    <div class="panel-header">
+      <span class="panel-title"><el-icon><Link /></el-icon> 文件直链</span>
+      <div class="header-actions">
+        <el-button size="small" type="primary" @click="showUpload = true">
+          <el-icon><UploadFilled /></el-icon> 上传文件
+        </el-button>
+        <el-button size="small" @click="fetchList" :loading="loading" :icon="Refresh">刷新</el-button>
+      </div>
+    </div>
 
-      <div class="dl-table-wrapper">
+    <div class="dl-table-wrapper">
         <el-table :data="items" stripe v-loading="loading" size="small" style="width:100%">
           <el-table-column label="文件名" min-width="160">
             <template #default="{ row }">
@@ -61,8 +58,7 @@
         </el-table>
       </div>
 
-      <el-empty v-if="!loading && items.length === 0" description="暂无直链，点击上传文件生成" :image-size="60" />
-    </el-card>
+    <el-empty v-if="!loading && items.length === 0" description="暂无直链，点击上传文件生成" :image-size="60" />
 
     <!-- 上传弹窗 -->
     <el-dialog v-model="showUpload" title="上传文件生成直链" width="440px">
@@ -217,14 +213,15 @@ onMounted(async () => {
 .directlink-manager {
   max-width: 1200px;
 }
-.card-header {
+.panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  margin-bottom: 12px;
 }
-.card-title {
+.panel-title {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -293,7 +290,7 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
-  .card-header {
+  .panel-header {
     flex-direction: column;
     align-items: stretch;
   }

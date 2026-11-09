@@ -2,29 +2,6 @@
   <div class="dashboard">
     <LoadingBlock v-if="loading" />
     <template v-else>
-    <!-- 体检 -->
-    <el-card class="health-card" shadow="never">
-      <template #header>
-        <div class="card-header-row">
-          <span class="card-title"><el-icon><CircleCheck /></el-icon> 体检</span>
-          <el-tag :type="healthTagType" size="small" effect="light">{{ healthLabel }}</el-tag>
-        </div>
-      </template>
-      <div class="health-list">
-        <div
-          v-for="h in healthItems"
-          :key="h.id"
-          class="health-item"
-          @click="goTo(h.target)"
-        >
-          <span class="health-dot" :style="{ background: statusColor(h.status) }"></span>
-          <span class="health-label">{{ h.label }}</span>
-          <span class="health-detail">{{ h.detail }}</span>
-        </div>
-        <div v-if="!healthItems.length" class="health-detail">暂无体检数据</div>
-      </div>
-    </el-card>
-
     <!-- Server Overview -->
     <el-card class="overview-card" shadow="never">
       <template #header>
@@ -214,7 +191,7 @@
             </div>
             <div class="day-label">{{ d.date.slice(5) }}</div>
           </div>
-          <div v-if="!trafficDays.length" class="health-detail">暂无数据</div>
+          <div v-if="!trafficDays.length" class="muted-hint">暂无数据</div>
         </div>
         <div class="traffic-legend">
           <span><i class="dot down"></i> 下行</span>
@@ -231,10 +208,7 @@ import LoadingBlock from '../components/LoadingBlock.vue'
 import TrendChart from '../components/TrendChart.vue'
 import { formatBytes } from '../composables/useFormat'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { get } from '../api'
-
-const router = useRouter()
 
 const info = ref({})
 const loading = ref(true)
@@ -261,16 +235,6 @@ const modeLabel = computed(() => {
     : `独立模式 :${info.value.panel.port}`
 })
 
-const healthItems = computed(() => info.value.health?.items || [])
-const healthLabel = computed(() => {
-  const s = info.value.health?.status
-  return s === 'error' ? '异常' : s === 'warn' ? '注意' : s === 'unknown' ? '未知' : '正常'
-})
-const healthTagType = computed(() => {
-  const s = info.value.health?.status
-  return s === 'error' ? 'danger' : s === 'warn' ? 'warning' : s === 'unknown' ? 'info' : 'success'
-})
-
 const traffic = computed(() => info.value.traffic || null)
 const trafficDays = computed(() => (traffic.value?.days || []).slice(-30))
 const trafficUsed = computed(() => {
@@ -289,13 +253,6 @@ const maxDayBytes = computed(() => {
   return Math.max(1, ...list.map(d => Math.max(d.rx || 0, d.tx || 0)))
 })
 
-function statusColor(status) {
-  if (status === 'error') return '#f56c6c'
-  if (status === 'warn') return '#e6a23c'
-  if (status === 'unknown') return '#909399'
-  return '#67c23a'
-}
-
 function series(key) {
   return (history.value || []).map(p => ({ t: p.t, v: p[key] || 0 }))
 }
@@ -303,10 +260,6 @@ function series(key) {
 function barHeight(value) {
   const ratio = (Number(value) || 0) / maxDayBytes.value
   return `${Math.max(2, Math.round(ratio * 60))}px`
-}
-
-function goTo(target) {
-  if (target) router.push(target)
 }
 
 function formatSpeed(bytesPerSec) {
@@ -380,39 +333,7 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
-.health-card {
-  margin-bottom: 20px;
-}
-.health-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-}
-.health-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: #fafafa;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.health-item:hover {
-  background: #f0f2f5;
-}
-.health-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.health-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #303133;
-}
-.health-detail {
+.muted-hint {
   font-size: 12px;
   color: #909399;
 }
@@ -591,10 +512,6 @@ onUnmounted(() => {
   }
   .resource-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-  .health-list {
-    flex-direction: column;
-    gap: 8px;
   }
   .trend-grid {
     grid-template-columns: 1fr;

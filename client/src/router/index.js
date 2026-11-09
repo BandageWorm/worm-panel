@@ -10,21 +10,25 @@ const routes = [
     children: [
       { path: 'dashboard', component: () => import('../views/Dashboard.vue') },
       { path: 'files', component: () => import('../views/FileManager.vue'), meta: { title: '文件管理' } },
-      { path: 'directlink', component: () => import('../views/DirectLinkManager.vue'), meta: { title: '文件直链' } },
       { path: 'terminal', component: () => import('../views/TerminalPage.vue'), meta: { title: '终端' } },
-      { path: 'firewall', component: () => import('../views/FirewallManager.vue'), meta: { title: '防火墙' } },
-      { path: 'nginx', component: () => import('../views/NginxManager.vue'), meta: { title: 'Nginx 管理' } },
-      { path: 'ssl', component: () => import('../views/SslManager.vue'), meta: { title: 'SSL 证书' } },
-      { path: 'cron', component: () => import('../views/CronManager.vue'), meta: { title: '计划任务' } },
+      { path: 'network', component: () => import('../views/NetworkManage.vue'), meta: { title: '网络' } },
       { path: 'notes', component: () => import('../views/NotesManager.vue'), meta: { title: '记事本' } },
       { path: 'sync', component: () => import('../views/Sync.vue'), meta: { title: '云备份' } },
-      { path: 'alerts', component: () => import('../views/AlertManager.vue'), meta: { title: '告警' } },
-      { path: 'ports', component: () => import('../views/PortManager.vue'), meta: { title: '端口与进程' } },
       { path: 'logs', component: () => import('../views/LogCenter.vue'), meta: { title: '日志中心' } },
       { path: 'pm2', component: () => import('../views/Pm2Manager.vue'), meta: { title: 'PM2 管理' } },
-      { path: 'systemd', component: () => import('../views/SystemdManager.vue'), meta: { title: 'Systemd 管理' } },
-      { path: 'xui', component: () => import('../views/XuiManager.vue'), meta: { title: '3X-UI' } },
-      { path: 'settings', component: () => import('../views/Settings.vue'), meta: { title: '系统设置' } }
+      { path: 'system', component: () => import('../views/SystemStatus.vue'), meta: { title: '系统状态' } },
+      { path: 'settings', component: () => import('../views/Settings.vue'), meta: { title: '系统设置' } },
+
+      // 旧入口保留重定向，避免书签与健康卡跳转失效
+      { path: 'directlink', redirect: { path: '/files', query: { tab: 'directlink' } } },
+      { path: 'ports', redirect: { path: '/system', query: { tab: 'ports' } } },
+      { path: 'cron', redirect: { path: '/system', query: { tab: 'cron' } } },
+      { path: 'systemd', redirect: { path: '/system', query: { tab: 'systemd' } } },
+      { path: 'nginx', redirect: { path: '/network', query: { tab: 'nginx' } } },
+      { path: 'ssl', redirect: { path: '/network', query: { tab: 'ssl' } } },
+      { path: 'firewall', redirect: { path: '/network', query: { tab: 'firewall' } } },
+      { path: 'xui', redirect: { path: '/network', query: { tab: 'xui' } } },
+      { path: 'alerts', redirect: { path: '/logs', query: { tab: 'alerts' } } }
     ]
   }
 ]

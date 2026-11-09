@@ -135,10 +135,12 @@ async function serviceItem() {
     if (status === 'ok') status = 'unknown';
     pm2Detail = 'PM2 状态未知';
   } else if (Array.isArray(pm2State.list)) {
-    const bad = pm2State.list.filter(p => p.status === 'errored' || p.status === 'stopped');
+    // 只有 errored 才算异常：stopped 属于用户主动停止或非开机自启的正常状态
+    const bad = pm2State.list.filter(p => p.status === 'errored');
     if (bad.length > 0) {
       if (STATUS_WEIGHT['warn'] > STATUS_WEIGHT[status]) status = 'warn';
-      pm2Detail = `${bad.length} 个 PM2 进程异常`;
+      const names = bad.map(p => p.name).slice(0, 3).join(', ');
+      pm2Detail = `${bad.length} 个 PM2 进程异常${names ? `（${names}${bad.length > 3 ? ' 等' : ''}）` : ''}`;
       problems.push(pm2Detail);
     }
   }

@@ -3,15 +3,12 @@
     <LoadingBlock v-if="loading" />
     <template v-else>
       <!-- Jobs Table -->
-      <el-card shadow="never">
-        <template #header>
-          <div class="card-header">
-            <span>计划任务</span>
-            <el-button size="small" type="primary" @click="openAdd">添加任务</el-button>
-          </div>
-        </template>
+      <div class="panel-header">
+        <span class="panel-title">计划任务</span>
+        <el-button size="small" type="primary" @click="openAdd">添加任务</el-button>
+      </div>
 
-        <el-table :data="jobs" stripe size="small">
+      <el-table :data="jobs" stripe size="small">
           <el-table-column label="状态" width="70">
             <template #default="{ row }">
               <el-switch
@@ -55,8 +52,7 @@
           </el-table-column>
         </el-table>
 
-        <el-empty v-if="jobs.length === 0" description="暂无计划任务" />
-      </el-card>
+      <el-empty v-if="jobs.length === 0" description="暂无计划任务" />
 
       <!-- Add/Edit Dialog -->
       <el-dialog v-model="showDialog" :title="editingJob ? '编辑任务' : '添加任务'" :width="isMobile ? '92%' : '560px'">
@@ -346,10 +342,15 @@ function formatDuration(ms) {
 .cron-manager {
   max-width: 1000px;
 }
-.card-header {
+.panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 12px;
+}
+.panel-title {
+  font-size: 15px;
+  font-weight: 600;
 }
 .cron-schedule {
   font-family: "JetBrains Mono", "Fira Code", monospace;

@@ -1,18 +1,14 @@
 <template>
   <div class="ports-page">
-    <el-card shadow="never" class="ports-card">
-      <template #header>
-        <div class="card-header">
-          <el-icon><Share /></el-icon>
-          <span>端口与进程</span>
-          <div class="header-actions">
-            <el-switch v-model="autoRefresh" size="small" active-text="自动刷新" />
-            <el-button size="small" :loading="loading" @click="refresh">刷新</el-button>
-          </div>
-        </div>
-      </template>
+    <div class="panel-header">
+      <span class="panel-title"><el-icon><Share /></el-icon> 端口与进程</span>
+      <div class="header-actions">
+        <el-switch v-model="autoRefresh" size="small" active-text="自动刷新" />
+        <el-button size="small" :loading="loading" @click="refresh">刷新</el-button>
+      </div>
+    </div>
 
-      <el-tabs v-model="tab">
+    <el-tabs v-model="tab">
         <el-tab-pane label="监听端口" name="ports">
           <div class="toolbar">
             <el-radio-group v-model="portSort" size="small">
@@ -99,8 +95,7 @@
           </el-table>
           <div v-if="!loading && !processes.length" class="empty-hint">没有读取到进程</div>
         </el-tab-pane>
-      </el-tabs>
-    </el-card>
+    </el-tabs>
   </div>
 </template>
 
@@ -217,13 +212,16 @@ onUnmounted(stopTimer)
 .ports-page {
   max-width: 1280px;
 }
-.ports-card {
-  border-radius: 10px;
-}
-.card-header {
+.panel-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 4px;
+}
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 15px;
   font-weight: 600;
 }
