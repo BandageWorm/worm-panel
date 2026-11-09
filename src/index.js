@@ -56,6 +56,11 @@ function createApp() {
   app.use('/api/settings', authMiddleware, require('./routes/settings'));
   app.use('/api/systemd', authMiddleware, require('./routes/systemd'));
   app.use('/api/files', authMiddleware, require('./routes/files'));
+  app.use('/api/metrics', authMiddleware, require('./routes/metrics'));
+  app.use('/api/traffic', authMiddleware, require('./routes/traffic'));
+  app.use('/api/alerts', authMiddleware, require('./routes/alerts'));
+  app.use('/api/ports', authMiddleware, require('./routes/ports'));
+  app.use('/api/logs', authMiddleware, require('./routes/logs'));
 
   app.use('/api/sync', authMiddleware, require('./routes/sync'));
   app.use('/api/gitworker', authMiddleware, require('./routes/gitworker'));

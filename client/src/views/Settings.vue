@@ -93,6 +93,38 @@
           <el-input-number v-model="form.settings.uploadMaxSize" :min="1" :max="20480" :step="50" controls-position="right" style="width:200px" />
           <div class="form-tip">修改后会同步更新面板反代的 nginx client_max_body_size，无需重启</div>
         </el-form-item>
+
+        <el-form-item>
+          <template #label>
+            <span class="label-with-tip">指标保留天数 <span class="form-tip-inline">（天，1 小时明细固定保留）</span></span>
+          </template>
+          <el-input-number v-model="form.settings.metricsRetentionDays" :min="1" :max="30" :step="1" controls-position="right" style="width:200px" />
+          <div class="form-tip">决定趋势图可回看的分钟级数据时长</div>
+        </el-form-item>
+
+        <el-form-item>
+          <template #label>
+            <span class="label-with-tip">流量统计网卡 <span class="form-tip-inline">（多个用英文逗号分隔，留空自动选择）</span></span>
+          </template>
+          <el-input v-model="form.settings.trafficIfaces" placeholder="留空则使用默认路由网卡" style="width:280px" />
+          <div class="form-tip">建议只填写承载业务的物理网卡，避免容器虚拟网卡虚增流量</div>
+        </el-form-item>
+
+        <el-form-item>
+          <template #label>
+            <span class="label-with-tip">月流量配额 <span class="form-tip-inline">（GB，0 = 不设配额）</span></span>
+          </template>
+          <el-input-number v-model="form.settings.trafficQuotaGB" :min="0" :max="102400" :step="100" controls-position="right" style="width:200px" />
+          <div class="form-tip">设置后仪表盘会展示配额进度，并在接近上限时加入体检提示</div>
+        </el-form-item>
+
+        <el-form-item>
+          <template #label>
+            <span class="label-with-tip">流量重置日 <span class="form-tip-inline">（每月 1-28 日）</span></span>
+          </template>
+          <el-input-number v-model="form.settings.trafficResetDay" :min="1" :max="28" :step="1" controls-position="right" style="width:200px" />
+          <div class="form-tip">按套餐账单周期填写；不按自然月计费的套餐请改成实际起算日</div>
+        </el-form-item>
       </el-form>
     </el-card>
 
@@ -165,7 +197,11 @@ const form = reactive({
     dashboardRefresh: 5,
     syncInterval: 12,
     editMaxSize: 1,
-    uploadMaxSize: 500
+    uploadMaxSize: 500,
+    metricsRetentionDays: 7,
+    trafficIfaces: '',
+    trafficQuotaGB: 0,
+    trafficResetDay: 1
   }
 })
 

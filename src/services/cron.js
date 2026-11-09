@@ -336,7 +336,26 @@ async function runJob(id) {
   // 写入历史
   appendHistory(id, result);
   logger.info('Cron', `执行任务 ${id}: exitCode=${result.exitCode}, duration=${result.duration}ms`);
+
+  // 非零退出码上报告警（延迟 require 避免模块循环依赖）
+  if (result.exitCode !== 0) {
+    try {
+      const alerts = require('./alerts');
+      const label = job.name || id;
+      const reason = timedOutReason(result);
+      alerts.emit('cron', id, `任务「${label}」执行失败（${reason}）`, 'error');
+    } catch (err) {
+      logger.warn('Cron', '上报任务失败事件时出错：' + (err.message || err));
+    }
+  }
+
   return result;
+}
+
+function timedOutReason(result) {
+  if (result.timeout) return '执行超时';
+  if (result.exitCode === -1) return '进程被终止';
+  return `退出码 ${result.exitCode}`;
 }
 
 // 获取执行历史

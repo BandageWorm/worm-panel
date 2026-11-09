@@ -69,6 +69,18 @@
           <el-icon><UploadFilled /></el-icon>
           <span>云备份</span>
         </el-menu-item>
+        <el-menu-item index="/alerts">
+          <el-icon><Bell /></el-icon>
+          <span>告警</span>
+        </el-menu-item>
+        <el-menu-item index="/ports">
+          <el-icon><Share /></el-icon>
+          <span>端口与进程</span>
+        </el-menu-item>
+        <el-menu-item index="/logs">
+          <el-icon><Document /></el-icon>
+          <span>日志中心</span>
+        </el-menu-item>
         <el-menu-item index="/settings">
           <el-icon><Setting /></el-icon>
           <span>设置</span>

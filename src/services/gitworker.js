@@ -183,6 +183,40 @@ async function deploy({ repo, name, entry, branch, port }) {
   return record;
 }
 
+// 项目列表与 PM2 运行状态合并：PM2 不可用时降级为 unknown，不影响列表返回
+async function listProjectsWithStatus() {
+  const projects = getProjects();
+  let byName = null;
+
+  try {
+    const pm2List = await require('./pm2').list();
+    byName = new Map((pm2List || []).map(p => [p.name, p]));
+  } catch (err) {
+    logger.warn('GitWorker', '查询 PM2 状态失败: ' + (err.message || err));
+  }
+
+  return projects.map(project => {
+    if (!byName) {
+      return { ...project, runtime: { status: 'unknown' } };
+    }
+    const proc = byName.get(project.name);
+    if (!proc) {
+      return { ...project, runtime: { status: 'missing' } };
+    }
+    return {
+      ...project,
+      runtime: {
+        status: proc.status || 'unknown',
+        pid: proc.pid,
+        restarts: proc.restarts,
+        cpu: proc.cpu,
+        memory: proc.memory,
+        uptime: proc.uptime
+      }
+    };
+  });
+}
+
 async function removeProject(name) {
   validateName(name);
 
@@ -322,4 +356,5 @@ async function deployGeneric({ repo, name, branch, command, port }) {
   return record;
 }
 
-module.exports = { getProjects, saveProjects, deploy, deployGeneric, removeProject };
+module.exports = {
+  listProjectsWithStatus, getProjects, saveProjects, deploy, deployGeneric, removeProject };

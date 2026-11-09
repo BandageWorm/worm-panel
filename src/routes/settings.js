@@ -2,6 +2,7 @@ const { Router } = require('express');
 const config = require('../services/config');
 const nginx = require('../services/nginx');
 const autosync = require('../services/autosync');
+const traffic = require('../services/traffic');
 const { hashPassword } = require('../utils/crypto');
 const logger = require('../utils/logger');
 
@@ -12,8 +13,13 @@ const SETTING_LIMITS = {
   dashboardRefresh: { min: 2, max: 300, label: '仪表盘刷新间隔' },
   syncInterval: { min: 0, max: 168, label: '云备份自动同步周期' },
   editMaxSize: { min: 1, max: 50, label: '在线编辑文件上限' },
-  uploadMaxSize: { min: 1, max: 20480, label: '上传大小上限' }
+  uploadMaxSize: { min: 1, max: 20480, label: '上传大小上限' },
+  metricsRetentionDays: { min: 1, max: 30, label: '指标保留天数' },
+  trafficQuotaGB: { min: 0, max: 102400, label: '月流量配额' },
+  trafficResetDay: { min: 1, max: 28, label: '流量重置日' }
 };
+
+const IFACE_PATTERN = /^[a-zA-Z0-9_.:@-]+(\s*,\s*[a-zA-Z0-9_.:@-]+)*$/;
 
 // GET /api/settings — 读取当前设置（不含敏感信息）
 router.get('/', (req, res) => {
@@ -42,6 +48,23 @@ function applySettings(cfg, input) {
       continue;
     }
     next[key] = value;
+  }
+
+  // 流量统计网卡是逗号分隔的字符串，单独校验格式与网卡是否存在
+  if (input.trafficIfaces !== undefined) {
+    const raw = String(input.trafficIfaces || '').trim();
+    if (raw && !IFACE_PATTERN.test(raw)) {
+      errors.push('流量统计网卡名称格式不正确（多个用英文逗号分隔）');
+    } else {
+      const normalized = raw.replace(/\s*,\s*/g, ',');
+      const names = normalized ? normalized.split(',') : [];
+      const missing = traffic.validateIfaces(names);
+      if (missing.length > 0) {
+        errors.push(`网卡不存在：${missing.join('、')}`);
+      } else {
+        next.trafficIfaces = normalized;
+      }
+    }
   }
 
   if (errors.length === 0) {

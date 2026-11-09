@@ -32,9 +32,10 @@ router.post('/deploy-generic', async (req, res) => {
   }
 });
 
-router.get('/projects', (req, res) => {
+router.get('/projects', async (req, res) => {
   try {
-    res.json(gitworker.getProjects());
+    const projects = await gitworker.listProjectsWithStatus();
+    res.json(projects);
   } catch (e) {
     logger.error('GitWorker', '获取项目列表失败', e);
     res.status(500).json({ error: e.message });

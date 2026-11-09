@@ -21,7 +21,9 @@
 
 | 模块 | 职责 |
 |------|------|
-| 仪表盘 | 系统概览：CPU、内存、磁盘、网络、快捷入口 |
+| 仪表盘 | 系统概览：CPU、内存、磁盘、网络、快捷入口 + 体检卡 + 资源趋势图 |
+| 指标采集 | 后台 5s 采样，1 小时明细 + 分钟级聚合（保留天数可配），供趋势图与告警复用 |
+| 流量统计 | 网卡流量跨重启累计，日/月聚合，月配额与重置日可配 |
 | 文件管理 | Web 文件浏览器：上传/下载/删除/新建目录/在线编辑 |
 | 文件直链 | 上传文件生成无需登录的公开直链，支持 Range 断点续传与可选过期 |
 | 终端 | 浏览器内 WebSocket + pty 交互式 bash |
@@ -31,6 +33,10 @@
 | 计划任务 | crontab 可视化管理，支持立即执行和历史记录 |
 | 记事本 | Markdown，文件系统存储于 data/notes/ |
 | 云备份 | 阿里云盘（aliyundrive-webdav + rclone）备份，含本地备份盘 |
+| 告警 | Telegram / 邮件 / Webhook 三通道，阈值与事件规则、冷却与恢复通知、告警历史 |
+| 端口与进程 | `ss` 监听端口 + `ps` 进程列表，交叉标注站点/PM2/防火墙，终止进程受保护清单约束 |
+| 日志中心 | 面板（journald）/ Nginx / PM2 / 系统 / 计划任务日志的尾部查看与关键字过滤 |
+| Worker 部署 | 入口在 PM2 页面内：从 Git 仓库部署 Cloudflare Worker 项目到 PM2，展示运行状态 |
 | PM2 管理 | 进程列表、重启/停止、配置编辑、日志查看 |
 | Systemd 管理 | 服务列表、启停、开机自启、日志查看 |
 | 3X-UI | 运行状态查看 + Nginx 反代入口 |
@@ -82,7 +88,21 @@ wsl -e bash -lc "bash /mnt/d/script/worm_panel/scripts/deploy-ssh.sh"
 ├── src/
 │   ├── index.js              # Express 应用初始化
 │   ├── routes/               # API 路由（按模块划分）
+│   │   ├── dashboard.js / metrics.js / traffic.js   # 仪表盘、指标历史、流量
+│   │   ├── alerts.js         # 告警配置 / 规则 / 测试发送 / 历史
+│   │   ├── ports.js          # 监听端口 / 进程列表 / 终止进程
+│   │   ├── logs.js           # 日志源与尾部读取
+│   │   └── ...               # 其余模块路由
 │   ├── services/             # 业务逻辑层
+│   │   ├── monitor.js        # 单点系统信息采集（底层）
+│   │   ├── metrics.js        # 指标采集调度 + 环形缓冲 + 抽稀查询
+│   │   ├── traffic.js        # 网卡流量累计与配额
+│   │   ├── health.js         # 体检汇总（证书/备份/服务/资源水位）
+│   │   ├── notify.js         # 通知通道（Telegram / 邮件 / Webhook）
+│   │   ├── alerts.js         # 规则引擎、冷却与恢复、告警历史
+│   │   ├── ports.js          # ss / ps 解析与进程终止保护
+│   │   ├── logs.js           # 日志源注册表（只接受 sourceId，不接受任意路径）
+│   │   └── ...               # 其余业务服务
 │   ├── middleware/auth.js    # JWT 验证
 │   └── utils/crypto.js      # bcrypt + JWT 工具
 ├── client/src/               # Vue 3 前端源码
@@ -91,6 +111,8 @@ wsl -e bash -lc "bash /mnt/d/script/worm_panel/scripts/deploy-ssh.sh"
 ├── public/                   # 前端构建产物
 └── data/                     # 运行时数据
     ├── config.json / notes/ / backups/nginx/ / logs/ / drive/ / cron-history/ / directlink/ / ssl/
+    ├── metrics.json / traffic.json          # 指标历史与流量累计
+    ├── alerts.json / alert-state.json / alert-pending.json   # 告警历史、冷却状态、待补发队列
 ```
 
 ## 开发约定

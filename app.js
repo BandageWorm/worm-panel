@@ -6,6 +6,9 @@ const config = require('./src/services/config');
 const nginx = require('./src/services/nginx');
 const cert = require('./src/services/cert');
 const autosync = require('./src/services/autosync');
+const metrics = require('./src/services/metrics');
+const traffic = require('./src/services/traffic');
+const alerts = require('./src/services/alerts');
 const { createTerminal } = require('./src/services/terminal');
 const logger = require('./src/utils/logger');
 
@@ -16,6 +19,31 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   logger.error('Process', '未处理的 Promise 拒绝', reason instanceof Error ? reason : new Error(String(reason)));
 });
+
+// 退出前同步落盘：设置页的重启按钮直接 process.exit()，不会触发 beforeExit
+process.on('exit', () => {
+  try { metrics.saveNow(); } catch {}
+  try { traffic.saveNow(); } catch {}
+  try { alerts.stop(); } catch {}
+});
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    try { metrics.stop(); } catch {}
+    try { alerts.stop(); } catch {}
+    process.exit(0);
+  });
+}
+
+let trafficTimer = null;
+
+function startCollectors() {
+  metrics.start();
+  traffic.load();
+  traffic.tick(new Date());
+  trafficTimer = setInterval(() => traffic.tick(new Date()), 10000);
+  if (trafficTimer.unref) trafficTimer.unref();
+  alerts.start();
+}
 
 const cfg = config.load();
 const port = cfg.port || 4567;
@@ -54,6 +82,9 @@ function startServer(server) {
 
     // Start 12-hour periodic sync
     startPeriodicSync();
+
+    // 指标采集与流量统计
+    startCollectors();
   });
 }
 

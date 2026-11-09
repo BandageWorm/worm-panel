@@ -5,7 +5,12 @@
     <el-tabs v-model="activeTab">
       <el-tab-pane label="进程列表" name="processes">
         <el-table :data="processes" stripe v-loading="loading" size="small">
-          <el-table-column prop="name" label="名称" min-width="160" />
+          <el-table-column label="名称" min-width="160">
+            <template #default="{ row }">
+              <span class="proc-name">{{ row.name }}</span>
+              <el-tag v-if="isDeployedWorker(row.name)" size="small" type="warning" effect="plain" class="worker-tag">Worker</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="状态" width="90">
             <template #default="{ row }">
               <el-tag :type="row.status === 'online' ? 'success' : 'danger'" size="small">
@@ -38,10 +43,32 @@
         </el-table>
 
         <div class="refresh-bar">
-          <el-button size="small" type="primary" @click="deployDialogVisible = true">从 GitHub 部署 Worker</el-button>
+          <el-button size="small" type="primary" @click="openWorkerDialog">从 GitHub 部署 Worker</el-button>
           <el-button size="small" type="success" @click="genericDialogVisible = true">从 GitHub 部署常规项目</el-button>
-          <el-button size="small" @click="fetchProcesses" :loading="loading">刷新</el-button>
+          <el-button size="small" @click="refreshAll" :loading="loading">刷新</el-button>
           <span class="auto-refresh" v-if="autoRefresh">每 5 秒自动刷新</span>
+        </div>
+
+        <!-- 通过 Git 部署的项目：与 PM2 进程状态关联展示 -->
+        <div class="worker-bar" v-if="workerProjects.length">
+          <span class="worker-bar-title">Git 部署项目：</span>
+          <el-tooltip
+            v-for="w in workerProjects"
+            :key="w.name"
+            :content="`${runtimeText(w)} · 端口 ${w.port}${runtimeSuffix(w)}`"
+            placement="top"
+          >
+            <el-tag
+              :type="runtimeTagType(w)"
+              size="small"
+              effect="plain"
+              closable
+              class="worker-chip"
+              @close="handleRemoveWorker(w)"
+            >
+              {{ w.name }} · {{ runtimeLabel(w) }}
+            </el-tag>
+          </el-tooltip>
         </div>
 
         <!-- Deploy Worker Dialog -->
@@ -60,11 +87,13 @@
               <el-input v-model="deployForm.branch" placeholder="main" />
             </el-form-item>
             <el-form-item label="端口">
-              <el-input-number v-model="deployForm.port" :min="1024" :max="65535" />
+              <el-input-number v-model="deployForm.port" :min="1024" :max="65535" controls-position="right" style="width:100%" />
             </el-form-item>
           </el-form>
+          <div class="deploy-hint" v-if="deploying">{{ deployStage }}（{{ deployElapsed }}s）</div>
+          <div class="deploy-hint" v-else>部署包含克隆仓库、安装依赖与启动进程，通常需要数十秒，请勿重复提交。</div>
           <template #footer>
-            <el-button @click="deployDialogVisible = false">取消</el-button>
+            <el-button @click="deployDialogVisible = false" :disabled="deploying">取消</el-button>
             <el-button type="primary" :loading="deploying" @click="handleDeploy">部署</el-button>
           </template>
         </el-dialog>
@@ -160,9 +189,9 @@
 
 <script setup>
 import LoadingBlock from '../components/LoadingBlock.vue'
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { get, post, put, del } from '../api'
+import { get, post, put, del, postWithTimeout } from '../api'
 import { useMobile } from '../composables/useMobile'
 import { formatBytes as formatBytesBase, BYTE_UNITS_NO_TB } from '../composables/useFormat'
 
@@ -187,9 +216,10 @@ const configContent = ref('')
 const savingConfig = ref(false)
 const autoRefresh = ref(true)
 
-// Deploy Worker
+// Deploy Worker（后端已合并 PM2 运行状态）
 const deployDialogVisible = ref(false)
 const deploying = ref(false)
+const deployElapsed = ref(0)
 const workerProjects = ref([])
 const deployForm = ref({
   repo: '',
@@ -197,6 +227,17 @@ const deployForm = ref({
   entry: 'index.js',
   branch: 'main',
   port: 8787
+})
+let deployTimer = null
+
+const NAME_PATTERN = /^[a-zA-Z0-9._-]+$/
+const REPO_PATTERN = /^(https?:\/\/[^\s;|&`$]+|git:\/\/[^\s;|&`$]+|git@[^\s;|&`$]+:[^\s;|&`$]+)$/
+
+const deployStage = computed(() => {
+  if (deployElapsed.value < 8) return '正在克隆仓库…'
+  if (deployElapsed.value < 40) return '正在安装依赖…'
+  if (deployElapsed.value < 90) return '正在启动进程…'
+  return '仍在进行中，请耐心等待…'
 })
 
 // Deploy Generic
@@ -223,10 +264,6 @@ const editForm = ref({
   interpreter: ''
 })
 
-function isDeployedWorker(name) {
-  return workerProjects.value.some(p => p.name === name)
-}
-
 onMounted(async () => {
   await fetchProcesses()
   loading.value = false
@@ -240,37 +277,136 @@ onMounted(async () => {
 onUnmounted(() => {
   clearInterval(refreshTimer)
   clearInterval(logTimer)
+  clearInterval(deployTimer)
 })
+
+async function refreshAll() {
+  await Promise.all([fetchProcesses(), fetchWorkerProjects()])
+}
+
+function isDeployedWorker(name) {
+  return workerProjects.value.some(p => p.name === name)
+}
+
+async function fetchWorkerProjects() {
+  try {
+    const res = await get('/gitworker/projects')
+    workerProjects.value = Array.isArray(res) ? res : []
+  } catch {
+    // Worker 列表失败不影响 PM2 主列表
+  }
+}
+
+function runtimeStatus(project) {
+  return project?.runtime?.status || 'unknown'
+}
+
+function runtimeLabel(project) {
+  const status = runtimeStatus(project)
+  if (status === 'online') return '运行中'
+  if (status === 'stopped') return '已停止'
+  if (status === 'errored') return '异常'
+  if (status === 'missing') return '未运行'
+  return '未知'
+}
+
+function runtimeTagType(project) {
+  const status = runtimeStatus(project)
+  if (status === 'online') return 'success'
+  if (status === 'stopped') return 'warning'
+  if (status === 'errored') return 'danger'
+  return 'info'
+}
+
+function runtimeText(project) {
+  const rt = project?.runtime || {}
+  if (rt.pid) return `PID ${rt.pid} · 重启 ${rt.restarts ?? 0} 次`
+  return 'PM2 中无对应进程'
+}
+
+function runtimeSuffix(project) {
+  const rt = project?.runtime || {}
+  return rt.pid ? ` · 重启 ${rt.restarts ?? 0}` : ''
+}
+
+function openWorkerDialog() {
+  deployDialogVisible.value = true
+}
+
+async function handleDeploy() {
+  const repo = String(deployForm.value.repo || '').trim()
+  const name = String(deployForm.value.name || '').trim()
+  const port = Number(deployForm.value.port)
+
+  if (!repo || !name) {
+    ElMessage.warning('请填写仓库地址和项目名称')
+    return
+  }
+  if (!REPO_PATTERN.test(repo)) {
+    ElMessage.warning('仓库地址格式不合法')
+    return
+  }
+  if (!NAME_PATTERN.test(name)) {
+    ElMessage.warning('项目名称只允许字母、数字、-、_、.')
+    return
+  }
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    ElMessage.warning('端口必须在 1024-65535 之间')
+    return
+  }
+
+  deploying.value = true
+  deployElapsed.value = 0
+  const startAt = Date.now()
+  deployTimer = setInterval(() => {
+    deployElapsed.value = Math.floor((Date.now() - startAt) / 1000)
+  }, 1000)
+
+  try {
+    await postWithTimeout('/gitworker/deploy', {
+      repo,
+      name,
+      entry: String(deployForm.value.entry || '').trim() || 'index.js',
+      branch: String(deployForm.value.branch || '').trim() || 'main',
+      port
+    })
+    ElMessage.success('部署成功')
+    deployDialogVisible.value = false
+    deployForm.value = { repo: '', name: '', entry: 'index.js', branch: 'main', port: 8787 }
+    await refreshAll()
+  } catch (e) {
+    ElMessage.error('部署失败: ' + e.message)
+  } finally {
+    clearInterval(deployTimer)
+    deployTimer = null
+    deploying.value = false
+  }
+}
+
+async function handleRemoveWorker(project) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除 Worker 项目「${project.name}」吗？将停止 PM2 进程并删除本地代码目录。`,
+      '删除确认',
+      { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+
+  try {
+    await del(`/gitworker/projects/${encodeURIComponent(project.name)}`)
+    ElMessage.success('已删除')
+    await refreshAll()
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
 
 async function fetchProcesses(silent = false) {
   try {
     processes.value = await get('/pm2/processes')
   } catch {}
-}
-
-async function fetchWorkerProjects() {
-  try {
-    workerProjects.value = await get('/gitworker/projects')
-  } catch {}
-}
-
-async function handleDeploy() {
-  if (!deployForm.value.repo || !deployForm.value.name) {
-    ElMessage.warning('请填写仓库地址和项目名称')
-    return
-  }
-  deploying.value = true
-  try {
-    await post('/gitworker/deploy', deployForm.value)
-    ElMessage.success('部署成功')
-    deployDialogVisible.value = false
-    deployForm.value = { repo: '', name: '', entry: 'index.js', branch: 'main', port: 8787 }
-    fetchProcesses()
-    fetchWorkerProjects()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-  deploying.value = false
 }
 
 async function handleDeployGeneric() {
@@ -431,6 +567,32 @@ function formatUptime(seconds) {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+.proc-name {
+  margin-right: 6px;
+}
+.worker-tag {
+  transform: scale(0.9);
+}
+.worker-bar {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+.worker-bar-title {
+  flex: 0 0 auto;
+}
+.worker-chip {
+  cursor: pointer;
+}
+.deploy-hint {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
 }
 .auto-refresh {
   font-size: 12px;

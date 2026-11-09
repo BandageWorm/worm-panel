@@ -83,9 +83,9 @@ log_ok "Frontend dependencies installed"
 # 低内存服务器构建前端时临时启用 swap（Vite 打包大文件时可能 OOM）
 SWAP_FILE="/swap.build"
 SWAP_ACTIVE=0
-if [ "$(free -m | awk '/^Mem:/{print $7}')" -lt 512 ]; then
+if [ "$(free -m | awk '/^Mem:/{print $2}')" -lt 2048 ]; then
   if ! swapon --show 2>/dev/null | grep -q .; then
-    log_info "Available memory <512MB, creating temporary swap for build..."
+    log_info "Total memory <2GB, creating temporary swap for build..."
     dd if=/dev/zero of="$SWAP_FILE" bs=1M count=1024 2>/dev/null
     chmod 600 "$SWAP_FILE"
     mkswap "$SWAP_FILE" 2>/dev/null
@@ -94,9 +94,16 @@ if [ "$(free -m | awk '/^Mem:/{print $7}')" -lt 512 ]; then
   fi
 fi
 
-log_info "Building frontend (output to ../public)..."
+# V8 默认堆上限约为系统内存的一半，1GB 机器上只有约 460MB，Vite 打包会遇到
+# "JavaScript heap out of memory"。这里显式放宽堆上限，超出物理内存的部分由 swap 兜底。
+BUILD_HEAP_MB="${BUILD_HEAP_MB:-1024}"
+export NODE_OPTIONS="--max-old-space-size=$BUILD_HEAP_MB"
+
+log_info "Building frontend (output to ../public, heap limit ${BUILD_HEAP_MB}MB)..."
 npm run build
 log_ok "Frontend built"
+
+unset NODE_OPTIONS
 
 # 清理临时 swap
 if [ "$SWAP_ACTIVE" -eq 1 ]; then

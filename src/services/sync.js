@@ -240,6 +240,16 @@ async function backup() {
   updatedCfg.sync = { ...s, lastSync: startTime.toISOString(), lastStatus: status };
   config.save(updatedCfg);
 
+  // 失败即时上报告警（延迟 require 避免模块循环依赖）
+  if (status === 'fail') {
+    try {
+      const alerts = require('./alerts');
+      alerts.emit('backup', 'sync', `云备份失败：${errMsg || '未知错误'}`, 'error');
+    } catch (emitErr) {
+      logger.warn('Sync', '上报备份失败事件时出错：' + (emitErr.message || emitErr));
+    }
+  }
+
   return record;
 }
 
